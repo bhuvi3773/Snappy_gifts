@@ -30,6 +30,16 @@
     --radius-lg: 16px;
     --radius-xl: 24px;
     --radius-full: 9999px;
+
+    /* Centralized Stacking Context Tokens (Stage 9 Overlay Architecture) */
+    --z-base: 1;
+    --z-sticky-header: 40;
+    --z-dropdown: 50;
+    --z-floating-controls: 60;
+    --z-backdrop: 70;
+    --z-drawer: 80;
+    --z-modal: 90;
+    --z-toast: 100;
   }
 
   html,
@@ -217,3 +227,15 @@
     transform: none !important;
   }
 }
+
+/* ========================================================================= */
+/* Centralized Stacking Context Layer System (Stage 9 Overlay Architecture)  */
+/* ========================================================================= */
+.z-layer-base { z-index: var(--z-base); }
+.z-layer-sticky { z-index: var(--z-sticky-header); }
+.z-layer-dropdown { z-index: var(--z-dropdown); }
+.z-layer-floating { z-index: var(--z-floating-controls); }
+.z-layer-backdrop { z-index: var(--z-backdrop); }
+.z-layer-drawer { z-index: var(--z-drawer); }
+.z-layer-modal { z-index: var(--z-modal); }
+.z-layer-toast { z-index: var(--z-toast); }

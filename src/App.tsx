@@ -130,9 +130,9 @@ const MainContent: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-[#08090B] text-[#F1F5F9] selection:bg-[#D5A34A]/30 selection:text-[#F5BD48]">
       
-      {/* Toast Notification Banner */}
+      {/* Toast Notification Banner (Top-Most Stacking Layer z-[100]) */}
       {toast && (
-        <div className={`fixed bottom-20 right-4 sm:bottom-22 sm:right-6 z-50 px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-semibold animate-in slide-in-from-bottom-5 duration-300 motion-reduce:animate-none ${
+        <div className={`fixed bottom-20 right-4 sm:bottom-22 sm:right-6 z-[100] px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-semibold animate-in slide-in-from-bottom-5 duration-300 motion-reduce:animate-none ${
           toast.type === 'error'
             ? 'bg-[#2A080C] text-[#FCA5A5] border border-rose-500/50'
             : toast.type === 'info'

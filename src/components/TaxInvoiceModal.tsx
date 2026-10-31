@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Order, CorporateQuotation } from '../types';
 import {
@@ -27,8 +27,33 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ onClose }) => 
 
   const isIntraState = order.shippingAddress.state.toLowerCase() === 'rajasthan';
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  // Lock body scroll while invoice modal is active
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = origOverflow;
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[90] overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white"
+      role="dialog"
+      aria-modal="true"
+      aria-label={isQuotation ? 'Formal Corporate Quotation' : 'Official GST Tax Invoice'}
+    >
       <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-[#D5A34A]/30 overflow-hidden my-6 print:shadow-none print:border-none print:m-0 print:rounded-none">
         
         {/* Modal Top Actions (Hidden in print) */}

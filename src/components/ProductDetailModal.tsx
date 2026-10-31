@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product, CustomizationOption } from '../types';
 import { useApp } from '../context/AppContext';
 import {
@@ -101,8 +101,33 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     setActiveModal('rfq');
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  // Lock body scroll while modal is active
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = origOverflow;
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in-0 duration-200">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[90] overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in-0 duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-label={product.name}
+    >
       <div className="relative w-full max-w-5xl bg-[#08090B] rounded-3xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] border border-[#D5A34A]/30 overflow-hidden my-6 text-[#F1F5F9]">
         
         {/* Close Button */}

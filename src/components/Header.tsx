@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Search,
@@ -44,6 +44,33 @@ export const Header: React.FC = () => {
   const [searchFocused, setSearchFocused] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authenticatedUser, setAuthenticatedUser] = useState<any>(null);
+
+  const personaRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns and drawers on click outside or Escape
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (personaRef.current && !personaRef.current.contains(e.target as Node)) {
+        setRoleMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setRoleMenuOpen(false);
+        setMobileMenuOpen(false);
+        setSearchFocused(false);
+      }
+    };
+
+    if (roleMenuOpen || mobileMenuOpen || searchFocused) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [roleMenuOpen, mobileMenuOpen, searchFocused]);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -94,7 +121,7 @@ export const Header: React.FC = () => {
       {/* ========================================================================= */}
       {/* 1. TOP ANNOUNCEMENT BAR — Refined Dark Luxury Surface                      */}
       {/* ========================================================================= */}
-      <div className="bg-[#17181C] border-b border-[#D5A34A]/15 text-xs text-[#CBD5E1] py-1.5 sm:py-2 px-4 sm:px-6 lg:px-8 overflow-hidden w-full">
+      <div className="bg-[#17181C] border-b border-[#D5A34A]/15 text-xs text-[#CBD5E1] py-1.5 sm:py-2 px-4 sm:px-6 lg:px-8 overflow-visible relative z-30 w-full">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 min-w-0">
           
           {/* Left Announcement */}
@@ -125,7 +152,7 @@ export const Header: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMode('b2c')}
-                className={`px-3 py-0.5 rounded-full font-semibold transition-all duration-200 ${
+                className={`px-3 py-0.5 rounded-full font-semibold transition-all duration-200 cursor-pointer ${
                   mode === 'b2c'
                     ? 'bg-gradient-to-r from-[#F5BD48] to-[#D5A34A] text-[#08090B] shadow-xs'
                     : 'text-[#CBD5E1] hover:text-white'
@@ -137,7 +164,7 @@ export const Header: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMode('b2b')}
-                className={`px-3 py-0.5 rounded-full font-semibold transition-all duration-200 flex items-center gap-1 ${
+                className={`px-3 py-0.5 rounded-full font-semibold transition-all duration-200 flex items-center gap-1 cursor-pointer ${
                   mode === 'b2b'
                     ? 'bg-gradient-to-r from-[#F5BD48] to-[#D5A34A] text-[#08090B] shadow-xs'
                     : 'text-[#CBD5E1] hover:text-white'
@@ -150,7 +177,7 @@ export const Header: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMode('admin')}
-                className={`px-2.5 py-0.5 rounded-full font-semibold transition-all duration-200 ${
+                className={`px-2.5 py-0.5 rounded-full font-semibold transition-all duration-200 cursor-pointer ${
                   mode === 'admin'
                     ? 'bg-[#EC3E98] text-white shadow-xs'
                     : 'text-[#CBD5E1] hover:text-white'
@@ -161,28 +188,39 @@ export const Header: React.FC = () => {
               </button>
             </div>
 
-            {/* Persona Simulator Dropdown */}
-            <div className="relative hidden lg:block">
+            {/* Persona Simulator Dropdown (Accessible, Z-Layer Managed & Unclipped) */}
+            <div ref={personaRef} className="relative hidden md:block">
               <button
                 type="button"
+                id="persona-simulator-button"
+                aria-haspopup="menu"
+                aria-expanded={roleMenuOpen}
+                aria-controls="persona-simulator-dropdown"
                 onClick={() => setRoleMenuOpen(!roleMenuOpen)}
-                className="flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-[#D5A34A]/30 bg-[#24252A] text-[#CBD5E1] text-[11px] font-medium hover:border-[#D5A34A] hover:text-[#F5BD48] transition-colors"
+                className="flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-[#D5A34A]/30 bg-[#24252A] text-[#CBD5E1] text-[11px] font-medium hover:border-[#D5A34A] hover:text-[#F5BD48] transition-colors focus-gold cursor-pointer"
                 title="Simulate User Persona"
               >
                 <SlidersHorizontal className="w-3 h-3 text-[#D5A34A]" />
                 <span className="capitalize">{currentRole.replace('_', ' ')}</span>
-                <ChevronDown className={`w-3 h-3 text-[#D5A34A]/70 transition-transform ${roleMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3 h-3 text-[#D5A34A]/70 transition-transform duration-200 ${roleMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {roleMenuOpen && (
-                <div className="absolute right-0 mt-1.5 w-60 rounded-xl bg-[#17181C] shadow-2xl border border-[#D5A34A]/35 p-2 z-50 text-xs">
+                <div
+                  id="persona-simulator-dropdown"
+                  role="menu"
+                  aria-orientation="vertical"
+                  aria-labelledby="persona-simulator-button"
+                  className="absolute right-0 mt-2 w-64 rounded-xl bg-[#17181C] shadow-[0_16px_40px_rgba(0,0,0,0.85)] border border-[#D5A34A]/35 p-2 z-50 text-xs backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150"
+                >
                   <div className="px-2 py-1 text-[9px] font-bold text-[#D5A34A] uppercase tracking-widest border-b border-[#D5A34A]/15 pb-1 mb-1">
                     Simulate Persona
                   </div>
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => handleRoleSelect('b2c_customer')}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition-colors ${
+                    className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
                       currentRole === 'b2c_customer'
                         ? 'bg-[#24252A] text-[#F5BD48] font-bold border border-[#D5A34A]/40'
                         : 'text-[#CBD5E1] hover:bg-[#24252A]/60'
@@ -193,8 +231,9 @@ export const Header: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => handleRoleSelect('corporate_procurement')}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition-colors ${
+                    className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
                       currentRole === 'corporate_procurement'
                         ? 'bg-[#24252A] text-[#F5BD48] font-bold border border-[#D5A34A]/40'
                         : 'text-[#CBD5E1] hover:bg-[#24252A]/60'
@@ -205,8 +244,9 @@ export const Header: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => handleRoleSelect('admin')}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition-colors ${
+                    className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
                       currentRole === 'admin'
                         ? 'bg-[#24252A] text-[#F5BD48] font-bold border border-[#D5A34A]/40'
                         : 'text-[#CBD5E1] hover:bg-[#24252A]/60'
@@ -226,7 +266,7 @@ export const Header: React.FC = () => {
       {/* ========================================================================= */}
       {/* 2. MAIN NAVIGATION CONTAINER — Spacious, Balanced & Aligned               */}
       {/* ========================================================================= */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5 relative z-20">
         <div className="flex items-center justify-between gap-4 sm:gap-6 lg:gap-8">
           
           {/* Left: Original SNAPPY GIFTZ Logo Artwork (Visually Prominent) */}
@@ -439,7 +479,7 @@ export const Header: React.FC = () => {
       {/* ========================================================================= */}
       {/* 3. QUICK CATEGORY NAVIGATION STRIP — Distinct Level 3                      */}
       {/* ========================================================================= */}
-      <div className="bg-[#17181C]/95 border-t border-[#D5A34A]/15 text-xs px-4 sm:px-6 lg:px-8 py-2.5 shadow-inner overflow-hidden w-full">
+      <div className="bg-[#17181C]/95 border-t border-[#D5A34A]/15 text-xs px-4 sm:px-6 lg:px-8 py-2.5 shadow-inner overflow-hidden w-full relative z-10">
         <div className="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto gap-4 no-scrollbar">
           
           {/* Category Quick Links */}
@@ -525,14 +565,18 @@ export const Header: React.FC = () => {
       {/* 4. MOBILE NAVIGATION DRAWER (ACCESSIBLE, TOUCH-FRIENDLY & CLEAN)           */}
       {/* ========================================================================= */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-[#17181C] border-b border-[#D5A34A]/25 p-4 space-y-4 animate-in slide-in-from-top-3 duration-200">
+        <div 
+          role="region" 
+          aria-label="Mobile Navigation" 
+          className="md:hidden bg-[#17181C] border-b border-[#D5A34A]/25 p-4 space-y-4 animate-in slide-in-from-top-3 duration-200 relative z-35"
+        >
           
           {/* Quick Mode Switches */}
           <div className="flex items-center justify-between bg-[#24252A] p-1 rounded-xl border border-[#D5A34A]/20 text-xs">
             <button
               type="button"
               onClick={() => { setMode('b2c'); setMobileMenuOpen(false); }}
-              className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+              className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                 mode === 'b2c' ? 'bg-[#D5A34A] text-[#08090B]' : 'text-[#CBD5E1]'
               }`}
             >
@@ -541,7 +585,7 @@ export const Header: React.FC = () => {
             <button
               type="button"
               onClick={() => { setMode('b2b'); setMobileMenuOpen(false); }}
-              className={`flex-1 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1 ${
+              className={`flex-1 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                 mode === 'b2b' ? 'bg-[#D5A34A] text-[#08090B]' : 'text-[#CBD5E1]'
               }`}
             >
@@ -551,12 +595,58 @@ export const Header: React.FC = () => {
             <button
               type="button"
               onClick={() => { setMode('admin'); setMobileMenuOpen(false); }}
-              className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+              className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                 mode === 'admin' ? 'bg-[#EC3E98] text-white' : 'text-[#CBD5E1]'
               }`}
             >
               Ops HQ
             </button>
+          </div>
+
+          {/* Mobile Persona Simulator Selection */}
+          <div className="bg-[#24252A]/60 p-2.5 rounded-xl border border-[#D5A34A]/20 space-y-2">
+            <div className="text-[10px] font-bold text-[#D5A34A] uppercase tracking-wider flex items-center gap-1.5">
+              <SlidersHorizontal className="w-3 h-3 text-[#D5A34A]" />
+              <span>Simulate User Persona</span>
+            </div>
+            <div className="grid grid-cols-1 gap-1 text-xs">
+              <button
+                type="button"
+                onClick={() => { handleRoleSelect('b2c_customer'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
+                  currentRole === 'b2c_customer'
+                    ? 'bg-[#17181C] text-[#F5BD48] font-bold border border-[#D5A34A]/40'
+                    : 'text-[#CBD5E1] hover:bg-[#17181C]'
+                }`}
+              >
+                <span>Individual Retail Buyer</span>
+                <span className="text-[9px] bg-[#08090B] border border-[#D5A34A]/30 text-[#D5A34A] px-1.5 py-0.5 rounded font-mono">B2C</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { handleRoleSelect('corporate_procurement'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
+                  currentRole === 'corporate_procurement'
+                    ? 'bg-[#17181C] text-[#F5BD48] font-bold border border-[#D5A34A]/40'
+                    : 'text-[#CBD5E1] hover:bg-[#17181C]'
+                }`}
+              >
+                <span>Corporate Procurement</span>
+                <span className="text-[9px] bg-[#EC3E98]/20 border border-[#EC3E98]/40 text-[#EC3E98] px-1.5 py-0.5 rounded font-bold">B2B</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { handleRoleSelect('admin'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
+                  currentRole === 'admin'
+                    ? 'bg-[#17181C] text-[#F5BD48] font-bold border border-[#D5A34A]/40'
+                    : 'text-[#CBD5E1] hover:bg-[#17181C]'
+                }`}
+              >
+                <span>Super Administrator</span>
+                <span className="text-[9px] bg-[#D5A34A]/20 border border-[#D5A34A]/40 text-[#F5BD48] px-1.5 py-0.5 rounded font-bold">HQ</span>
+              </button>
+            </div>
           </div>
 
           {/* Quick Category List */}

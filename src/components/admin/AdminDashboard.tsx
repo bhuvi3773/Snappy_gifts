@@ -3681,7 +3681,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Add Product Modal */}
       {showAddProductModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl space-y-4">
             <h3 className="font-serif font-bold text-xl text-slate-900">Add New Product to Catalog</h3>
             <form onSubmit={handleCreateProduct} className="space-y-3 text-xs">
@@ -3790,7 +3790,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Batch 6: Order Details & Audit History Modal */}
       {selectedOrderDetails && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-4xl bg-white rounded-3xl p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
@@ -4187,7 +4187,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Batch 6: Dispatch Courier Modal */}
       {dispatchModalOrder && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
@@ -4319,7 +4319,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Batch 10: Edit User Role Modal */}
       {editingUserRole && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="font-serif font-bold text-lg text-slate-900 flex items-center gap-2">
@@ -4379,7 +4379,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Batch 10: View User Details Modal */}
       {selectedUserDetail && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="font-serif font-bold text-lg text-slate-900 flex items-center gap-2">
@@ -4462,7 +4462,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Batch 10: Audit Payload Inspector Modal */}
       {selectedAuditPayload && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-xl bg-white rounded-3xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="font-serif font-bold text-lg text-slate-900 flex items-center gap-2">

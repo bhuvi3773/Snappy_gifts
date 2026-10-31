@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles } from 'lucide-react';
 
 interface WhatsAppFloatingButtonProps {
@@ -12,8 +12,29 @@ export const WhatsAppFloatingButton: React.FC<WhatsAppFloatingButtonProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [userMsg, setUserMsg] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const encodedDefaultMsg = encodeURIComponent(defaultMessage);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
 
   const handleSendCustomMsg = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +45,7 @@ export const WhatsAppFloatingButton: React.FC<WhatsAppFloatingButtonProps> = ({
   };
 
   return (
-    <div className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end pointer-events-auto">
+    <div ref={containerRef} className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-[60] flex flex-col items-end pointer-events-auto">
       
       {/* Interactive Quick Chat Drawer / Tooltip Popover */}
       {isOpen && (

@@ -273,6 +273,15 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({ onClose 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // Lock body scroll while modal is active
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = origOverflow;
+    };
+  }, []);
+
   const steps = [
     { title: 'Order Placed', desc: 'Payment verified & order booked' },
     { title: 'Artwork Approval', desc: 'Laser typography preview verified' },
@@ -318,7 +327,10 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({ onClose 
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in-0 duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[90] overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in-0 duration-200"
       role="dialog"
       aria-modal="true"
       aria-labelledby="tracking-modal-title"

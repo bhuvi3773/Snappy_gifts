@@ -67,8 +67,22 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // Lock body scroll while drawer is open
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = origOverflow;
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/80 backdrop-blur-md flex justify-end animate-in fade-in-0 duration-200">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[80] overflow-hidden bg-black/80 backdrop-blur-md flex justify-end animate-in fade-in-0 duration-200"
+    >
       <div
         role="dialog"
         aria-modal="true"

@@ -1569,7 +1569,12 @@ Ananya Sen,9830022334,ananya@company.com,SKU-prod-1,15,Salt Lake Sector V,,Kolka
 
       {/* Quote Accept / Reject Confirmation Modal */}
       {selectedQuoteForAction && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedQuoteForAction(null);
+          }}
+          className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+        >
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-rose-100">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-serif font-bold text-lg text-slate-900">
