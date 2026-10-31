@@ -32,9 +32,9 @@ yarn-error.log*
 postgres_data/
 
 # Customer Private Uploads (Stored outside public web root)
-uploads/
-private_uploads/
-storage/
+/uploads/
+/private_uploads/
+/storage/
 
 # OS Metadata
 .DS_Store
