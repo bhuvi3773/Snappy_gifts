@@ -30,7 +30,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="bg-[#FFFDFB] text-slate-800 antialiased selection:bg-rose-200 selection:text-rose-900 font-sans">
+      <body className="bg-[#08090B] text-[#F1F5F9] antialiased selection:bg-[#D5A34A]/30 selection:text-[#F5BD48] font-sans">
         <AppProvider>
           {children}
         </AppProvider>
