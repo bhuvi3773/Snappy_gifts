@@ -35,7 +35,8 @@ export const Header: React.FC = () => {
     setSearchQuery,
     currentPincode,
     setActiveCategory,
-    activeCategory
+    activeCategory,
+    navigateToCatalog
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -445,8 +446,8 @@ export const Header: React.FC = () => {
           <div className="flex items-center gap-6 sm:gap-7 text-[#CBD5E1] font-medium whitespace-nowrap text-[12px]">
             <button
               type="button"
-              onClick={() => { setActiveCategory('Personalized Gifts'); setMode('b2c'); }}
-              className={`hover:text-[#F5BD48] transition-colors flex items-center gap-1.5 ${
+              onClick={() => navigateToCatalog({ category: 'Personalized Gifts' })}
+              className={`hover:text-[#F5BD48] transition-colors flex items-center gap-1.5 cursor-pointer ${
                 activeCategory === 'Personalized Gifts' ? 'text-[#F5BD48] font-bold' : ''
               }`}
             >
@@ -455,8 +456,8 @@ export const Header: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => { setActiveCategory('Home Decor'); setMode('b2c'); }}
-              className={`hover:text-[#F5BD48] transition-colors ${
+              onClick={() => navigateToCatalog({ category: 'Home Decor' })}
+              className={`hover:text-[#F5BD48] transition-colors cursor-pointer ${
                 activeCategory === 'Home Decor' ? 'text-[#F5BD48] font-bold' : ''
               }`}
             >
@@ -464,8 +465,8 @@ export const Header: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => { setActiveCategory('Soft Toys'); setMode('b2c'); }}
-              className={`hover:text-[#F5BD48] transition-colors ${
+              onClick={() => navigateToCatalog({ category: 'Soft Toys' })}
+              className={`hover:text-[#F5BD48] transition-colors cursor-pointer ${
                 activeCategory === 'Soft Toys' ? 'text-[#F5BD48] font-bold' : ''
               }`}
             >
@@ -473,8 +474,8 @@ export const Header: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => { setActiveCategory('Luxury Gifts'); setMode('b2c'); }}
-              className={`hover:text-[#F5BD48] transition-colors ${
+              onClick={() => navigateToCatalog({ category: 'Luxury Gifts' })}
+              className={`hover:text-[#F5BD48] transition-colors cursor-pointer ${
                 activeCategory === 'Luxury Gifts' ? 'text-[#F5BD48] font-bold' : ''
               }`}
             >
@@ -482,8 +483,8 @@ export const Header: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => { setActiveCategory('Gift Hampers'); setMode('b2c'); }}
-              className={`hover:text-[#F5BD48] transition-colors ${
+              onClick={() => navigateToCatalog({ category: 'Gift Hampers' })}
+              className={`hover:text-[#F5BD48] transition-colors cursor-pointer ${
                 activeCategory === 'Gift Hampers' ? 'text-[#F5BD48] font-bold' : ''
               }`}
             >
@@ -491,8 +492,8 @@ export const Header: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => { setActiveCategory('Stationery & Desk'); setMode('b2c'); }}
-              className={`hover:text-[#F5BD48] transition-colors ${
+              onClick={() => navigateToCatalog({ category: 'Stationery & Desk' })}
+              className={`hover:text-[#F5BD48] transition-colors cursor-pointer ${
                 activeCategory === 'Stationery & Desk' ? 'text-[#F5BD48] font-bold' : ''
               }`}
             >
@@ -575,9 +576,8 @@ export const Header: React.FC = () => {
                 key={idx}
                 type="button"
                 onClick={() => {
-                  setActiveCategory(cat.key);
-                  setMode('b2c');
                   setMobileMenuOpen(false);
+                  navigateToCatalog({ category: cat.key });
                 }}
                 className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
                   activeCategory === cat.key

@@ -39,6 +39,11 @@
     font-family: var(--font-sans);
     overflow-x: hidden;
     max-width: 100vw;
+    scroll-behavior: smooth;
+  }
+
+  #catalog-section {
+    scroll-margin-top: 140px;
   }
 }
 

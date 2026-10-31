@@ -14,13 +14,13 @@ import {
 } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const { setMode, showToast } = useApp();
+  const { setMode, showToast, navigateToCatalog } = useApp();
   const [email, setEmail] = useState('');
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
     if (email.trim()) {
-      showToast('Welcome to the Ajmer Royal Circle! Your ₹100 welcome gift code is WELCOME100 🎉');
+      showToast('Welcome to the Snappy Royal Circle! Your ₹100 welcome gift code is WELCOME100 🎉');
       setEmail('');
     }
   };
@@ -74,12 +74,12 @@ export const Footer: React.FC = () => {
               Bespoke Occasions
             </h4>
             <ul className="space-y-2.5 text-xs text-[#CBD5E1]/80">
-              <li><button onClick={() => setMode('b2c')} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48]">Birthday Gifts &amp; Decors</button></li>
-              <li><button onClick={() => setMode('b2c')} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48]">Anniversary &amp; Love Keepsakes</button></li>
-              <li><button onClick={() => setMode('b2c')} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48]">Wedding &amp; Engagement Hampers</button></li>
-              <li><button onClick={() => setMode('b2c')} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48]">Diwali &amp; Festive Baskets</button></li>
-              <li><button onClick={() => setMode('b2c')} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48]">Housewarming &amp; Pooja Diya Sets</button></li>
-              <li><button onClick={() => setMode('b2c')} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48]">Farewell &amp; Milestone Awards</button></li>
+              <li><button onClick={() => navigateToCatalog({ occasion: 'Birthday' })} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48] cursor-pointer">Birthday Gifts &amp; Decors</button></li>
+              <li><button onClick={() => navigateToCatalog({ occasion: 'Anniversary' })} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48] cursor-pointer">Anniversary &amp; Love Keepsakes</button></li>
+              <li><button onClick={() => navigateToCatalog({ occasion: 'Wedding' })} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48] cursor-pointer">Wedding &amp; Engagement Hampers</button></li>
+              <li><button onClick={() => navigateToCatalog({ occasion: 'Diwali' })} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48] cursor-pointer">Diwali &amp; Festive Baskets</button></li>
+              <li><button onClick={() => navigateToCatalog({ category: 'Home Decor' })} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48] cursor-pointer">Housewarming &amp; Pooja Diya Sets</button></li>
+              <li><button onClick={() => navigateToCatalog({ occasion: 'Corporate' })} className="hover:text-[#F5BD48] transition-colors text-left focus-visible:outline-hidden focus-visible:text-[#F5BD48] cursor-pointer">Farewell &amp; Milestone Awards</button></li>
             </ul>
           </div>
 

@@ -28,14 +28,14 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ onClose }) => 
   const isIntraState = order.shippingAddress.state.toLowerCase() === 'rajasthan';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white">
-      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-rose-100 overflow-hidden my-6 print:shadow-none print:border-none print:m-0 print:rounded-none">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white">
+      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-[#D5A34A]/30 overflow-hidden my-6 print:shadow-none print:border-none print:m-0 print:rounded-none">
         
         {/* Modal Top Actions (Hidden in print) */}
-        <div className="bg-slate-900 text-white px-6 py-3.5 flex items-center justify-between print:hidden">
+        <div className="bg-[#08090B] text-[#F1F5F9] px-6 py-3.5 flex items-center justify-between border-b border-[#D5A34A]/20 print:hidden">
           <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-rose-400" />
-            <span className="text-xs font-semibold">
+            <FileText className="w-4 h-4 text-[#F5BD48]" />
+            <span className="text-xs font-semibold text-[#F1F5F9]">
               {isQuotation ? 'Formal Corporate Quotation' : 'Official GST Tax Invoice'}
             </span>
           </div>
@@ -43,14 +43,14 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ onClose }) => 
           <div className="flex items-center gap-3">
             <button
               onClick={handlePrint}
-              className="px-4 py-1.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+              className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#F5BD48] to-[#D5A34A] hover:from-[#E5AD38] hover:to-[#C5933A] text-[#08090B] text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Print / Download PDF</span>
             </button>
             <button
               onClick={onClose}
-              className="p-1 rounded-full text-slate-400 hover:text-white"
+              className="p-1 rounded-full text-[#94A3B8] hover:text-[#F1F5F9] transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -65,17 +65,17 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ onClose }) => 
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-serif text-2xl font-bold tracking-tight text-slate-900">
-                  AJMER GIFT CHARM
+                  SNAPPY GIFTZ
                 </span>
-                <span className="text-xs font-mono font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded">
+                <span className="text-xs font-mono font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                   LLP
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">Gifts That Create Memories • Handcrafted In Rajasthan</p>
+              <p className="text-[11px] text-slate-500">Curated Bespoke Luxury • Gifts That Create Memories</p>
               <div className="text-[11px] text-slate-600 mt-2 space-y-0.5">
                 <div>14, Ana Sagar Circular Road, Civil Lines, Ajmer, Rajasthan - 305001</div>
                 <div><strong>GSTIN:</strong> 08AAACA9921M1Z3 | <strong>State Code:</strong> 08 (Rajasthan)</div>
-                <div><strong>Email:</strong> billing@ajmergiftcharm.com | <strong>Contact:</strong> +91 98290 84721</div>
+                <div><strong>Email:</strong> billing@snappygiftz.com | <strong>Contact:</strong> +91 98290 84721</div>
               </div>
             </div>
 
@@ -222,7 +222,7 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ onClose }) => 
 
               <div className="pt-2 border-t-2 border-slate-900 flex justify-between font-bold text-sm">
                 <span>Total Invoice Value (INR):</span>
-                <span className="font-mono text-base text-rose-950">
+                <span className="font-mono text-base text-slate-950 font-bold">
                   ₹{(isQuotation ? quotation.grandTotal : order.grandTotal).toLocaleString('en-IN')}
                 </span>
               </div>
@@ -234,16 +234,16 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ onClose }) => 
             <div className="text-[10px] text-slate-500 space-y-1">
               <div className="font-bold text-slate-700 uppercase">Declaration:</div>
               <p>
-                We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct. Goods once sold are covered under Ajmer Gift Charm 7-day transit replacement guarantee.
+                We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct. Goods once sold are covered under Snappy Giftz 7-day transit replacement guarantee.
               </p>
               <div className="text-slate-400">Computer generated invoice. No physical signature required.</div>
             </div>
 
             <div className="text-right">
-              <div className="w-32 h-16 border border-dashed border-rose-300 rounded-lg ml-auto flex items-center justify-center text-[10px] text-rose-700 font-serif italic bg-rose-50/50">
-                Ajmer Craft Lab Authorized Seal
+              <div className="w-32 h-16 border border-dashed border-[#D5A34A] rounded-lg ml-auto flex items-center justify-center text-[10px] text-amber-900 font-serif italic bg-amber-50/50">
+                Snappy Giftz Authorized Seal
               </div>
-              <div className="text-xs font-bold text-slate-800 mt-1">For Ajmer Gift Charm LLP</div>
+              <div className="text-xs font-bold text-slate-800 mt-1">For Snappy Giftz LLP</div>
               <div className="text-[10px] text-slate-500">Authorized Signatory</div>
             </div>
           </div>

@@ -95,6 +95,7 @@ interface AppContextType {
   
   toast: { message: string; type: 'success' | 'info' | 'error' } | null;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
+  navigateToCatalog: (options?: { category?: string; occasion?: string; query?: string }) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -553,6 +554,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  const navigateToCatalog = (options?: { category?: string; occasion?: string; query?: string }) => {
+    setMode('b2c');
+    if (options?.category !== undefined) {
+      setActiveCategory(options.category);
+    }
+    if (options?.occasion !== undefined) {
+      setActiveOccasion(options.occasion);
+    }
+    if (options?.query !== undefined) {
+      setSearchQuery(options.query);
+    }
+
+    if (typeof window !== 'undefined') {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // Slight timeout to allow React to update mode and render catalog if coming from B2B/Admin
+      setTimeout(() => {
+        const el = document.getElementById('catalog-section');
+        if (el) {
+          el.scrollIntoView({
+            behavior: prefersReducedMotion ? 'auto' : 'smooth',
+            block: 'start'
+          });
+        }
+      }, 60);
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -607,7 +635,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeOccasion,
         setActiveOccasion,
         toast,
-        showToast
+        showToast,
+        navigateToCatalog
       }}
     >
       {children}

@@ -21,31 +21,27 @@ import {
 } from 'lucide-react';
 
 export const HeroBanner: React.FC = () => {
-  const { setMode, setActiveCategory, setActiveOccasion, setSearchQuery } = useApp();
+  const { setMode, setActiveCategory, setActiveOccasion, setSearchQuery, navigateToCatalog } = useApp();
 
   const [conciergeRecipient, setConciergeRecipient] = useState<string>('All');
   const [conciergeOccasion, setConciergeOccasion] = useState<string>('Anniversary');
 
   const scrollToCatalog = () => {
-    const el = document.getElementById('catalog-section');
-    el?.scrollIntoView({ behavior: 'smooth' });
+    navigateToCatalog();
   };
 
   const handleOccasionClick = (occ: string) => {
-    setActiveOccasion(occ);
-    scrollToCatalog();
+    navigateToCatalog({ occasion: occ });
   };
 
   const handleCategoryClick = (catKey: string) => {
-    setActiveCategory(catKey);
-    scrollToCatalog();
+    navigateToCatalog({ category: catKey });
   };
 
   const handleConciergeSubmit = () => {
-    if (conciergeOccasion !== 'All') {
-      setActiveOccasion(conciergeOccasion);
-    }
-    scrollToCatalog();
+    navigateToCatalog({
+      occasion: conciergeOccasion !== 'All' ? conciergeOccasion : undefined
+    });
   };
 
   // 6 Curated Categories matching Stage 3 requirement:
@@ -157,15 +153,11 @@ export const HeroBanner: React.FC = () => {
   ];
 
   const handleOccasionSelect = (item: typeof occasionItems[0]) => {
-    if (setSearchQuery) setSearchQuery('');
     if (item.filterType === 'category') {
-      setActiveCategory(item.filterValue);
-      setActiveOccasion('All');
+      navigateToCatalog({ category: item.filterValue, occasion: 'All', query: '' });
     } else {
-      setActiveCategory('All');
-      setActiveOccasion(item.filterValue);
+      navigateToCatalog({ category: 'All', occasion: item.filterValue, query: '' });
     }
-    scrollToCatalog();
   };
 
   return (
