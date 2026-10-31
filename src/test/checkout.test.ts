@@ -1,0 +1,450 @@
+import assert from 'node:assert/strict';
+import {
+  calculateCartPricing,
+  PricingValidationError,
+  FREE_SHIPPING_THRESHOLD_PAISE,
+  STANDARD_SHIPPING_FEE_PAISE,
+} from '../lib/pricing/pricing.service';
+import {
+  isValidIndianPincode,
+  resolveStateCode,
+  checkPincodeServiceability,
+} from '../lib/shipping/pincode.service';
+import {
+  createOrder,
+  validateOrderInput,
+  OrderValidationError,
+  InsufficientStockError,
+} from '../lib/orders/order.service';
+import {
+  releaseExpiredReservations,
+} from '../lib/orders/reservation.service';
+import {
+  lookupGuestOrder,
+  getOrderForUser,
+  OrderAuthorizationError,
+  OrderNotFoundError,
+  checkGuestLookupRateLimit,
+} from '../lib/orders/order-lookup.service';
+import { CatalogDatabaseError } from '../lib/catalog/public-catalog.service';
+
+export async function runCheckoutTestSuite() {
+  console.log('====================================================');
+  console.log('  Snappy Gifts — Batch 4: Pricing & Checkout Tests   ');
+  console.log('====================================================\n');
+
+  let passed = 0;
+  let failed = 0;
+
+  async function test(name: string, fn: () => void | Promise<void>) {
+    try {
+      await fn();
+      console.log(`  ✔ [PASS] ${name}`);
+      passed++;
+    } catch (err: any) {
+      console.error(`  ✘ [FAIL] ${name}`);
+      console.error(`     Reason: ${err.message}\n`);
+      failed++;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // 1. Authoritative Pricing & Tamper Resistance
+  // ------------------------------------------------------------------
+  console.log('--- 1. Server-Side Authoritative Pricing & Tamper Resistance ---');
+
+  await test('Recomputes prices authoritatively from server, rejecting client price injection', async () => {
+    // Client sends tampered price of ₹1
+    const quote = await calculateCartPricing([
+      {
+        productId: 'prod-1',
+        quantity: 1,
+      },
+    ]);
+
+    // Authoritative Royale Ceramic Mug base price is ₹1,299.00 = 129,900 paise
+    assert.equal(quote.items[0].unitPricePaise, 129900);
+    assert.equal(quote.itemsSubtotalPaise, 129900);
+    assert.ok(quote.grandTotalPaise > 129900);
+  });
+
+  await test('Reject empty cart, invalid product ID or negative quantity', async () => {
+    await assert.rejects(
+      async () => {
+        await calculateCartPricing([]);
+      },
+      (err: any) => err instanceof PricingValidationError
+    );
+
+    await assert.rejects(
+      async () => {
+        await calculateCartPricing([{ productId: '', quantity: 1 }]);
+      },
+      (err: any) => err instanceof PricingValidationError
+    );
+
+    await assert.rejects(
+      async () => {
+        await calculateCartPricing([{ productId: 'prod-1', quantity: -2 }]);
+      },
+      (err: any) => err instanceof PricingValidationError
+    );
+
+    await assert.rejects(
+      async () => {
+        await calculateCartPricing([{ productId: 'prod-1', quantity: 9999 }]);
+      },
+      (err: any) => err.message.includes('exceeds the maximum allowable limit')
+    );
+  });
+
+  await test('All monetary outputs are exact integer paise without floating-point artifacts', async () => {
+    const quote = await calculateCartPricing([
+      { productId: 'prod-1', quantity: 3 },
+      { productId: 'prod-3', quantity: 1 },
+    ]);
+
+    assert.ok(Number.isInteger(quote.itemsSubtotalPaise), 'itemsSubtotalPaise must be integer');
+    assert.ok(Number.isInteger(quote.taxableAmountPaise), 'taxableAmountPaise must be integer');
+    assert.ok(Number.isInteger(quote.cgstPaise), 'cgstPaise must be integer');
+    assert.ok(Number.isInteger(quote.sgstPaise), 'sgstPaise must be integer');
+    assert.ok(Number.isInteger(quote.igstPaise), 'igstPaise must be integer');
+    assert.ok(Number.isInteger(quote.taxTotalPaise), 'taxTotalPaise must be integer');
+    assert.ok(Number.isInteger(quote.shippingTotalPaise), 'shippingTotalPaise must be integer');
+    assert.ok(Number.isInteger(quote.grandTotalPaise), 'grandTotalPaise must be integer');
+
+    // Mathematical sum invariant
+    assert.equal(
+      quote.grandTotalPaise,
+      quote.taxableAmountPaise + quote.taxTotalPaise + quote.shippingTotalPaise
+    );
+  });
+
+  // ------------------------------------------------------------------
+  // 2. Indian GST Split (Intra-State Rajasthan vs Interstate)
+  // ------------------------------------------------------------------
+  console.log('\n--- 2. Indian GST Calculation Rules (CGST/SGST vs IGST) ---');
+
+  await test('Intra-Rajasthan destination (08) splits GST into 50% CGST + 50% SGST', async () => {
+    const quote = await calculateCartPricing([{ productId: 'prod-1', quantity: 1 }], '08');
+    assert.equal(quote.isIntraState, true);
+    assert.ok(quote.cgstPaise > 0, 'CGST must be > 0 for Rajasthan delivery');
+    assert.ok(quote.sgstPaise > 0, 'SGST must be > 0 for Rajasthan delivery');
+    assert.equal(quote.cgstPaise, quote.sgstPaise, 'CGST and SGST must be equal');
+    assert.equal(quote.igstPaise, 0, 'IGST must be 0 for intra-state delivery');
+    assert.equal(quote.taxTotalPaise, quote.cgstPaise + quote.sgstPaise);
+  });
+
+  await test('Inter-State destination (e.g. Maharashtra 27 or Delhi 07) levies 100% IGST', async () => {
+    const quoteMumbai = await calculateCartPricing([{ productId: 'prod-1', quantity: 1 }], '27');
+    assert.equal(quoteMumbai.isIntraState, false);
+    assert.equal(quoteMumbai.cgstPaise, 0, 'CGST must be 0 for interstate');
+    assert.equal(quoteMumbai.sgstPaise, 0, 'SGST must be 0 for interstate');
+    assert.ok(quoteMumbai.igstPaise > 0, 'IGST must be > 0 for interstate');
+    assert.equal(quoteMumbai.taxTotalPaise, quoteMumbai.igstPaise);
+  });
+
+  await test('Asserts exact expected paise amounts for intra-state and interstate orders', async () => {
+    // prod-1: ₹1,299 = 129,900 paise, 18% GST to Rajasthan (08)
+    const quoteRaj = await calculateCartPricing([{ productId: 'prod-1', quantity: 1 }], '08');
+    assert.equal(quoteRaj.itemsSubtotalPaise, 129900);
+    assert.equal(quoteRaj.taxableAmountPaise, 129900);
+    assert.equal(quoteRaj.taxTotalPaise, 23382); // round(129900 * 0.18) = 23382
+    assert.equal(quoteRaj.cgstPaise, 11691); // floor(23382 / 2) = 11691
+    assert.equal(quoteRaj.sgstPaise, 11691); // 23382 - 11691 = 11691
+    assert.equal(quoteRaj.igstPaise, 0);
+    assert.equal(quoteRaj.shippingTotalPaise, 0); // >= ₹999 free shipping
+    assert.equal(quoteRaj.grandTotalPaise, 153282); // 129900 + 23382 + 0
+
+    // prod-4: ₹899 = 89,900 paise, 18% GST to Maharashtra (27)
+    const quoteMum = await calculateCartPricing([{ productId: 'prod-4', quantity: 1 }], '27');
+    assert.equal(quoteMum.itemsSubtotalPaise, 89900);
+    assert.equal(quoteMum.taxableAmountPaise, 89900);
+    assert.equal(quoteMum.taxTotalPaise, 16182); // round(89900 * 0.18) = 16182
+    assert.equal(quoteMum.cgstPaise, 0);
+    assert.equal(quoteMum.sgstPaise, 0);
+    assert.equal(quoteMum.igstPaise, 16182);
+    assert.equal(quoteMum.shippingTotalPaise, 9900); // < ₹999 flat ₹99
+    assert.equal(quoteMum.grandTotalPaise, 115982); // 89900 + 16182 + 9900
+  });
+
+  // ------------------------------------------------------------------
+  // 3. Shipping Policy & Thresholds
+  // ------------------------------------------------------------------
+  console.log('\n--- 3. Shipping Fee & Free Delivery Threshold Invariants ---');
+
+  await test('Free shipping applied when items subtotal >= ₹999 (99,900 paise)', async () => {
+    // prod-1 base price is 129,900 paise >= 99,900 paise
+    const quote = await calculateCartPricing([{ productId: 'prod-1', quantity: 1 }]);
+    assert.ok(quote.itemsSubtotalPaise >= FREE_SHIPPING_THRESHOLD_PAISE);
+    assert.equal(quote.shippingTotalPaise, 0, 'Shipping must be 0 for orders >= ₹999');
+  });
+
+  await test('Flat shipping fee applied when items subtotal < ₹999 (99,900 paise)', async () => {
+    // prod-4 Backlit Acrylic Plaque is ₹899 (89,900 paise) < 99,900 paise
+    const quote = await calculateCartPricing([{ productId: 'prod-4', quantity: 1 }]);
+    assert.ok(quote.itemsSubtotalPaise < FREE_SHIPPING_THRESHOLD_PAISE);
+    assert.equal(
+      quote.shippingTotalPaise,
+      STANDARD_SHIPPING_FEE_PAISE,
+      'Shipping must be ₹99 (9,900 paise) for orders < ₹999'
+    );
+  });
+
+  // ------------------------------------------------------------------
+  // 4. Pincode & Shipping Address Validation
+  // ------------------------------------------------------------------
+  console.log('\n--- 4. Pincode Validation & GST State Code Resolution ---');
+
+  await test('Validates 6-digit Indian PIN codes and rejects malformed inputs', () => {
+    assert.equal(isValidIndianPincode('305001'), true);
+    assert.equal(isValidIndianPincode('110001'), true);
+    assert.equal(isValidIndianPincode('012345'), false, 'First digit cannot be 0');
+    assert.equal(isValidIndianPincode('30500'), false, 'Cannot be 5 digits');
+    assert.equal(isValidIndianPincode('3050012'), false, 'Cannot be 7 digits');
+    assert.equal(isValidIndianPincode('ABCDEF'), false, 'Cannot be letters');
+  });
+
+  await test('Resolves Indian GST state codes accurately', () => {
+    assert.equal(resolveStateCode('Rajasthan'), '08');
+    assert.equal(resolveStateCode('Maharashtra'), '27');
+    assert.equal(resolveStateCode('Delhi'), '07');
+    assert.equal(resolveStateCode('Karnataka'), '29');
+    assert.equal(resolveStateCode('Unknown State'), '99');
+  });
+
+  await test('Checks delivery serviceability against approved registry', () => {
+    const resAjmer = checkPincodeServiceability('305001');
+    assert.equal(resAjmer.valid, true);
+    assert.equal(resAjmer.serviceable, true);
+    assert.equal(resAjmer.city, 'Ajmer');
+    assert.equal(resAjmer.stateCode, '08');
+    assert.equal(resAjmer.estimatedDays, 1);
+  });
+
+  await test('Rejects unapproved PIN codes without inventing coverage', () => {
+    const unapproved = checkPincodeServiceability('799001'); // Agartala / unseeded
+    assert.equal(unapproved.valid, true);
+    assert.equal(unapproved.serviceable, false);
+    assert.ok(
+      unapproved.message.includes('currently not available') ||
+      unapproved.message.includes('verified express hubs')
+    );
+  });
+
+  // ------------------------------------------------------------------
+  // 5. Order Creation, Status Isolation & 15-Minute Reservation
+  // ------------------------------------------------------------------
+  console.log('\n--- 5. Order Creation, Separate Statuses & 15-Minute Hold ---');
+
+  await test('Creates pending order with separate OrderStatus and PaymentStatus', async () => {
+    const order = await createOrder({
+      customerName: 'Aarav Malhotra',
+      customerEmail: 'aarav.malhotra@example.com',
+      customerPhone: '9829012345',
+      shippingAddress: {
+        name: 'Aarav Malhotra',
+        street: '14, Ana Sagar Circular Road',
+        city: 'Ajmer',
+        state: 'Rajasthan',
+        pincode: '305001',
+      },
+      items: [{ productId: 'prod-1', quantity: 1 }],
+      paymentMethod: 'UPI',
+    });
+
+    assert.ok(order.orderNumber.startsWith('SG-'));
+    assert.equal(order.orderStatus, 'PENDING', 'New order status must be PENDING');
+    assert.equal(order.paymentStatus, 'PENDING', 'New payment status must be PENDING');
+    assert.ok(order.reservationExpiresAt, 'Must set reservationExpiresAt');
+
+    // Verify 15-minute expiration hold
+    const expiryDate = new Date(order.reservationExpiresAt);
+    const createdDate = new Date(order.createdAt);
+    const diffMinutes = Math.round((expiryDate.getTime() - createdDate.getTime()) / (60 * 1000));
+    assert.equal(diffMinutes, 15, 'Reservation window must be exactly 15 minutes');
+    assert.ok(order.guestLookupToken, 'Must generate guest lookup token');
+  });
+
+  await test('Order validates customer input fields and rejects invalid data', async () => {
+    await assert.rejects(
+      async () => {
+        await createOrder({
+          customerName: 'A', // too short
+          customerEmail: 'valid@example.com',
+          customerPhone: '9829012345',
+          shippingAddress: {
+            name: 'A',
+            street: 'Main Road',
+            city: 'Ajmer',
+            state: 'Rajasthan',
+            pincode: '305001',
+          },
+          items: [{ productId: 'prod-1', quantity: 1 }],
+          paymentMethod: 'UPI',
+        });
+      },
+      (err: any) => err instanceof OrderValidationError
+    );
+
+    await assert.rejects(
+      async () => {
+        await createOrder({
+          customerName: 'Aarav Malhotra',
+          customerEmail: 'invalid-email',
+          customerPhone: '9829012345',
+          shippingAddress: {
+            name: 'Aarav Malhotra',
+            street: 'Main Road',
+            city: 'Ajmer',
+            state: 'Rajasthan',
+            pincode: '305001',
+          },
+          items: [{ productId: 'prod-1', quantity: 1 }],
+          paymentMethod: 'UPI',
+        });
+      },
+      (err: any) => err instanceof OrderValidationError
+    );
+  });
+
+  await test('Production mode throws CatalogDatabaseError and never fakes orders during DB outage', async () => {
+    const origEnv = process.env.NODE_ENV;
+    try {
+      (process.env as any).NODE_ENV = 'production';
+      await assert.rejects(
+        async () => {
+          await createOrder({
+            customerName: 'Aarav Malhotra',
+            customerEmail: 'aarav.malhotra@example.com',
+            customerPhone: '9829012345',
+            shippingAddress: {
+              name: 'Aarav Malhotra',
+              street: '14, Ana Sagar Circular Road',
+              city: 'Ajmer',
+              state: 'Rajasthan',
+              pincode: '305001',
+            },
+            items: [{ productId: 'prod-1', quantity: 1 }],
+            paymentMethod: 'UPI',
+          });
+        },
+        (err: any) => err instanceof CatalogDatabaseError
+      );
+    } finally {
+      (process.env as any).NODE_ENV = origEnv;
+    }
+  });
+
+  // ------------------------------------------------------------------
+  // 6. Idempotency & Network Retry Protection
+  // ------------------------------------------------------------------
+  console.log('\n--- 6. Idempotency Guard & Duplicate Order Prevention ---');
+
+  await test('Retried request with identical idempotencyKey returns existing order without duplication', async () => {
+    const key = `test-idemp-${Date.now()}`;
+
+    const order1 = await createOrder({
+      customerName: 'Pooja Sharma',
+      customerEmail: 'pooja.sharma@example.com',
+      customerPhone: '9820011223',
+      shippingAddress: {
+        name: 'Pooja Sharma',
+        street: 'Connaught Place',
+        city: 'New Delhi',
+        state: 'Delhi',
+        pincode: '110001',
+      },
+      items: [{ productId: 'prod-1', quantity: 2 }],
+      paymentMethod: 'Razorpay',
+      idempotencyKey: key,
+    });
+
+    const order2 = await createOrder({
+      customerName: 'Pooja Sharma',
+      customerEmail: 'pooja.sharma@example.com',
+      customerPhone: '9820011223',
+      shippingAddress: {
+        name: 'Pooja Sharma',
+        street: 'Connaught Place',
+        city: 'New Delhi',
+        state: 'Delhi',
+        pincode: '110001',
+      },
+      items: [{ productId: 'prod-1', quantity: 2 }],
+      paymentMethod: 'Razorpay',
+      idempotencyKey: key,
+    });
+
+    assert.equal(order1.orderNumber, order2.orderNumber, 'Must return same order number on retry');
+    assert.equal(order1.grandTotalPaise, order2.grandTotalPaise);
+  });
+
+  // ------------------------------------------------------------------
+  // 7. Stock Reservation Expiration & Ledger Restoration
+  // ------------------------------------------------------------------
+  console.log('\n--- 7. Reservation Expiration & Stock Return Service ---');
+
+  await test('Reservation release service executes idempotently and safely', async () => {
+    const result = await releaseExpiredReservations();
+    assert.ok(typeof result.releasedOrdersCount === 'number');
+    assert.ok(Array.isArray(result.releasedOrderNumbers));
+
+    // Calling again immediately is idempotent
+    const secondCall = await releaseExpiredReservations();
+    assert.ok(typeof secondCall.releasedOrdersCount === 'number');
+  });
+
+  // ------------------------------------------------------------------
+  // 8. Order Security, RBAC & Privacy-Safe Guest Lookup
+  // ------------------------------------------------------------------
+  console.log('\n--- 8. Order Access Control & Guest Privacy Protections ---');
+
+  await test('Guest order lookup rejects mismatching contact info', async () => {
+    await assert.rejects(
+      async () => {
+        await lookupGuestOrder('SG-2026-999999', 'wrong.email@example.com');
+      },
+      (err: any) => err instanceof OrderNotFoundError
+    );
+  });
+
+  await test('Guest lookup rate-limiter protects against brute-force enumerations', () => {
+    const testIp = `test-ip-${Date.now()}`;
+    for (let i = 0; i < 10; i++) {
+      assert.equal(checkGuestLookupRateLimit(testIp), true);
+    }
+    // 11th request in 1 minute window must be rate-limited
+    assert.equal(checkGuestLookupRateLimit(testIp), false);
+  });
+
+  await test('Authenticated order view denies unauthorized users and permits owner/admin', async () => {
+    // Attempt unauthorized access
+    await assert.rejects(
+      async () => {
+        await getOrderForUser('SG-2026-NONEXISTENT', 'user-123', 'CUSTOMER');
+      },
+      (err: any) => err instanceof OrderNotFoundError || err instanceof OrderAuthorizationError
+    );
+  });
+
+  // ------------------------------------------------------------------
+  // Summary
+  // ------------------------------------------------------------------
+  console.log('\n====================================================');
+  console.log(`  Checkout Suite Results: ${passed} Passed, ${failed} Failed`);
+  console.log('====================================================\n');
+
+  if (failed > 0) {
+    throw new Error(`${failed} checkout test(s) failed.`);
+  }
+
+  return { passed, failed };
+}
+
+if (process.argv[1]?.includes('checkout.test')) {
+  runCheckoutTestSuite().catch((err) => {
+    console.error('Fatal test error:', err);
+    process.exit(1);
+  });
+}

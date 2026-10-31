@@ -14,8 +14,23 @@ import {
   FileText,
   Lock,
   Sparkles,
-  Smartphone
+  Smartphone,
+  AlertCircle
 } from 'lucide-react';
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') return resolve(false);
+    if ((window as any).Razorpay) return resolve(true);
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 interface CheckoutModalProps {
   onClose: () => void;
@@ -33,7 +48,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     currentRole,
     appliedCoupon,
     couponDiscount,
-    createOrder,
     currentPincode,
     checkPincode,
     setSelectedOrder,
@@ -42,6 +56,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const [step, setStep] = useState<'address' | 'payment' | 'success'>('address');
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   // Address State
   const [customerName, setCustomerName] = useState(
@@ -87,66 +102,208 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
 
   // Handle final order payment confirmation
-  const handleConfirmOrder = () => {
+  const handleConfirmOrder = async () => {
     setIsProcessing(true);
 
-    setTimeout(() => {
-      const shippingAddress: Address = {
-        id: `addr-${Date.now()}`,
-        name: customerName,
-        company: companyName || undefined,
-        street,
-        city,
-        state,
-        pincode,
-        phone: customerPhone
-      };
+    const shippingAddress: Address = {
+      id: `addr-${Date.now()}`,
+      name: customerName,
+      company: companyName || undefined,
+      street,
+      city,
+      state,
+      pincode,
+      phone: customerPhone
+    };
 
-      const newOrder = createOrder({
-        customerName,
-        customerEmail,
-        customerPhone,
-        type: mode === 'b2b' ? 'B2B' : 'B2C',
-        organizationName: companyName || undefined,
-        gstin: gstin || undefined,
-        items: cart,
-        shippingAddress,
-        subtotal,
-        discountTotal,
-        couponApplied: appliedCoupon || undefined,
-        taxTotal,
-        shippingTotal,
-        grandTotal,
-        paymentMethod,
-        paymentStatus: paymentMethod === 'CorporateCredit' ? 'Net30 Approved' : 'Paid',
-        orderStatus: 'Order Placed',
-        estimatedDeliveryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        bulkRecipientsCount: cart.some(i => i.recipientList?.length) 
-          ? cart.reduce((a, c) => a + (c.recipientList?.length || 0), 0)
-          : undefined
+    const idempotencyKey = `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    try {
+      const response = await fetch('/api/checkout/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName,
+          customerEmail,
+          customerPhone,
+          gstin: gstin || undefined,
+          shippingAddress: {
+            name: customerName,
+            company: companyName || undefined,
+            street,
+            city,
+            state,
+            pincode,
+            phone: customerPhone,
+          },
+          items: cart.map((i) => ({
+            productId: i.productId,
+            variantId: i.variant?.id,
+            quantity: i.quantity,
+            customization: i.customization ? {
+              note: i.customization.engravedText || i.customization.specialInstructions || i.customization.giftNote || undefined,
+            } : undefined,
+          })),
+          paymentMethod,
+          idempotencyKey,
+        }),
       });
 
-      setCreatedOrder(newOrder);
-      setIsProcessing(false);
-      setStep('success');
+      const json = await response.json();
+      if (response.ok && json.success && json.data) {
+        const serverOrder = json.data;
+        const newOrder: Order = {
+          id: serverOrder.id,
+          orderNumber: serverOrder.orderNumber,
+          date: new Date(serverOrder.createdAt).toISOString().split('T')[0],
+          customerName: serverOrder.customerName,
+          customerEmail: serverOrder.customerEmail,
+          customerPhone: serverOrder.customerPhone,
+          type: mode === 'b2b' ? 'B2B' : 'B2C',
+          organizationName: companyName || undefined,
+          gstin: gstin || undefined,
+          items: cart,
+          shippingAddress,
+          subtotal: Math.round(serverOrder.itemsSubtotalPaise / 100),
+          discountTotal: 0,
+          couponApplied: undefined,
+          taxTotal: Math.round(serverOrder.taxTotalPaise / 100),
+          shippingTotal: Math.round(serverOrder.shippingTotalPaise / 100),
+          grandTotal: Math.round(serverOrder.grandTotalPaise / 100),
+          paymentMethod: serverOrder.paymentMethod,
+          paymentStatus: 'Pending Verification',
+          orderStatus: 'Order Placed',
+          estimatedDeliveryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          awbNumber: `BD-AIR-${serverOrder.orderNumber.replace(/[^0-9]/g, '').slice(-6) || '8812'}`,
+          courierPartner: 'BlueDart Air Express',
+        };
 
-      // Trigger celebration confetti
-      try {
-        confetti({
-          particleCount: 120,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
-      } catch (err) {
-        // fallback
+        // Initiate Gateway Payment Order on Server
+        try {
+          const pmtResponse = await fetch('/api/payments/create-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderNumber: serverOrder.orderNumber,
+              guestToken: serverOrder.guestLookupToken,
+            }),
+          });
+
+          const pmtJson = await pmtResponse.json();
+          if (!pmtResponse.ok || !pmtJson.success || !pmtJson.data) {
+            setCheckoutError(pmtJson?.error || 'Failed to initiate payment gateway order.');
+            setIsProcessing(false);
+            return;
+          }
+
+          const pmtConfig = pmtJson.data;
+
+          // If Razorpay SDK is loaded or can be loaded dynamically
+          const isScriptReady = await loadRazorpayScript();
+          if (isScriptReady && (window as any).Razorpay) {
+            const rzp = new (window as any).Razorpay({
+              key: pmtConfig.gatewayKeyId,
+              amount: pmtConfig.amountPaise,
+              currency: pmtConfig.currency || 'INR',
+              name: 'Snappy Gifts',
+              description: `Order ${serverOrder.orderNumber}`,
+              order_id: pmtConfig.gatewayOrderId,
+              prefill: {
+                name: serverOrder.customerName,
+                email: serverOrder.customerEmail,
+                contact: serverOrder.customerPhone,
+              },
+              theme: { color: '#881337' },
+              handler: async function (rzpResp: any) {
+                setIsProcessing(true);
+                try {
+                  const verifyRes = await fetch('/api/payments/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      orderNumber: serverOrder.orderNumber,
+                      gatewayOrderId: rzpResp.razorpay_order_id,
+                      gatewayPaymentId: rzpResp.razorpay_payment_id,
+                      gatewaySignature: rzpResp.razorpay_signature,
+                      guestToken: serverOrder.guestLookupToken,
+                    }),
+                  });
+
+                  const verifyJson = await verifyRes.json();
+                  if (verifyRes.ok && verifyJson.success) {
+                    const isCaptured = Boolean(verifyJson.data?.isCaptured);
+                    newOrder.paymentStatus = isCaptured ? 'Paid' : 'Pending Verification';
+                    newOrder.orderStatus = 'Order Placed';
+                    setCreatedOrder(newOrder);
+                    setIsProcessing(false);
+                    setStep('success');
+
+                    if (isCaptured) {
+                      try {
+                        confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+                      } catch {}
+                    }
+
+                    onOrderSuccess(newOrder);
+                  } else {
+                    setCheckoutError(verifyJson?.error || 'Payment signature verification failed.');
+                    setIsProcessing(false);
+                  }
+                } catch {
+                  setCheckoutError('Connection failure during payment verification.');
+                  setIsProcessing(false);
+                }
+              },
+              modal: {
+                ondismiss: function () {
+                  setCheckoutError('Payment cancelled. Your 15-minute stock hold remains active; click Pay to retry.');
+                  setIsProcessing(false);
+                },
+              },
+            });
+
+            rzp.open();
+            return;
+          }
+
+          // Test Mode / Mock Payment Driver fallback when browser popup is not loaded
+          if (pmtConfig.gatewayKeyId?.startsWith('rzp_mock')) {
+            setCreatedOrder(newOrder);
+            setIsProcessing(false);
+            setStep('success');
+            try {
+              confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+            } catch {}
+            onOrderSuccess(newOrder);
+            return;
+          }
+
+          setCheckoutError('Unable to load payment gateway window. Please check your network or adblocker.');
+          setIsProcessing(false);
+          return;
+        } catch {
+          setCheckoutError('Payment gateway communication error.');
+          setIsProcessing(false);
+          return;
+        }
+      } else {
+        const errorMsg = json?.error || 'Unable to place order. Please review your cart and details.';
+        setCheckoutError(errorMsg);
+        setIsProcessing(false);
       }
-
-      onOrderSuccess(newOrder);
-    }, 1200);
+    } catch {
+      setCheckoutError('Connection failure: Unable to communicate with the checkout server. Please verify your connection and try again.');
+      setIsProcessing(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="checkout-modal-title"
+    >
       <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-rose-100 overflow-hidden my-6">
         
         {/* Top Header */}
@@ -156,7 +313,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-serif font-bold text-lg">
+              <h3 id="checkout-modal-title" className="font-serif font-bold text-lg">
                 {step === 'success' ? 'Order Confirmed!' : 'Ajmer Gift Charm Express Checkout'}
               </h3>
               <p className="text-xs text-rose-200">
@@ -168,6 +325,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           {step !== 'success' && (
             <button
               onClick={onClose}
+              aria-label="Close checkout modal"
               className="p-1 rounded-full text-rose-300 hover:text-white hover:bg-rose-800 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -531,6 +689,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span className="font-serif text-xl text-rose-950">₹{grandTotal.toLocaleString('en-IN')}</span>
                 </div>
               </div>
+
+              {/* Error Banner */}
+              {checkoutError && (
+                <div role="alert" className="p-3.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 font-medium leading-relaxed">{checkoutError}</div>
+                </div>
+              )}
 
               {/* Confirm Button */}
               <div className="flex items-center justify-between pt-2">

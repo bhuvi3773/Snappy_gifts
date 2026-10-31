@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
@@ -17,9 +19,11 @@ import {
   X,
   MapPin,
   Clock,
-  Package
+  Package,
+  User
 } from 'lucide-react';
 import { UserRole } from '../types';
+import { AuthModal } from './AuthModal';
 
 export const Header: React.FC = () => {
   const {
@@ -39,6 +43,21 @@ export const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authenticatedUser, setAuthenticatedUser] = useState<any>(null);
+
+  React.useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated && data.user) {
+          setAuthenticatedUser(data.user);
+        } else {
+          setAuthenticatedUser(null);
+        }
+      })
+      .catch(() => setAuthenticatedUser(null));
+  }, []);
 
   const totalCartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -186,10 +205,10 @@ export const Header: React.FC = () => {
               <div>
                 <div className="flex items-center gap-1.5 leading-none">
                   <span className="font-serif font-black text-xl sm:text-2xl text-[#2F0B10] tracking-tight">
-                    AJMER
+                    SNAPPY
                   </span>
                   <span className="font-serif font-black text-xl sm:text-2xl text-[#D1395E] tracking-tight">
-                    GIFT CHARM
+                    GIFTS
                   </span>
                   <span className="text-[10px] bg-[#E8DDD8] text-[#55403B] font-bold px-1.5 py-0.5 rounded text-center leading-none tracking-wider ml-0.5">
                     .COM
@@ -313,6 +332,7 @@ export const Header: React.FC = () => {
               onClick={() => setActiveModal('cart')}
               className="flex items-center gap-2.5 group focus:outline-hidden"
               title="View Shopping Bag"
+              aria-label={`View shopping bag (${totalCartCount} items)`}
             >
               <div className="relative w-9 h-9 rounded-full bg-rose-50 border border-rose-200 text-[#D1395E] flex items-center justify-center group-hover:bg-[#D1395E] group-hover:text-white transition-all shadow-xs">
                 <Gift className="w-5 h-5" />
@@ -337,6 +357,7 @@ export const Header: React.FC = () => {
               onClick={() => { setMode('b2c'); }}
               className="relative p-2 text-slate-600 hover:text-[#D1395E] transition-colors"
               title="Wishlist"
+              aria-label={`View wishlist (${wishlist.length} saved gifts)`}
             >
               <Heart className="w-5 h-5" />
               {wishlist.length > 0 && (
@@ -344,6 +365,19 @@ export const Header: React.FC = () => {
                   {wishlist.length}
                 </span>
               )}
+            </button>
+
+            {/* Account / Auth Trigger */}
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              aria-label="Manage user account and active session"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-[#881337] text-xs font-semibold transition-all shadow-2xs"
+              title="Account & Authentication"
+            >
+              <User className="w-4 h-4 text-[#A21D32]" />
+              <span className="hidden md:inline">
+                {authenticatedUser ? authenticatedUser.name.split(' ')[0] : 'Sign In'}
+              </span>
             </button>
 
             {/* Mobile Menu Button */}
@@ -433,6 +467,13 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Secure Auth & Persona Management Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthSuccess={(user) => setAuthenticatedUser(user)}
+      />
 
     </header>
   );

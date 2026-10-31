@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product, CustomizationOption } from '../types';
 import {
   Sparkles,
@@ -11,7 +11,15 @@ import {
   ShieldCheck,
   Crown,
   Palette,
-  Stamp
+  Stamp,
+  Upload,
+  Image as ImageIcon,
+  Sliders,
+  AlertCircle,
+  Trash2,
+  Loader2,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 
 interface PersonalizationStudioProps {
@@ -39,18 +47,98 @@ export const PersonalizationStudio: React.FC<PersonalizationStudioProps> = ({
   const [ribbonColor, setRibbonColor] = useState(
     initialCustomization?.ribbonColor || 'Rose Gold Silk'
   );
-  const [boxWrapStyle, setBoxWrapStyle] = useState(
-    initialCustomization?.boxWrapStyle || 'Blush Pink with Gold Foil'
-  );
+  const [isCrateApproved, setIsCrateApproved] = useState<boolean>(() => {
+    return (
+      (typeof process !== 'undefined' &&
+        (process.env.NEXT_PUBLIC_WOODEN_CRATE_SURCHARGE_APPROVED === 'true' ||
+          process.env.WOODEN_CRATE_SURCHARGE_APPROVED === 'true')) ||
+      false
+    );
+  });
+
+  // Query server authoritative configuration endpoint to guarantee frontend/backend consistency
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/personalization/config')
+      .then((res) => res.json())
+      .then((payload) => {
+        if (isMounted && payload?.success && payload?.data?.packaging?.woodenCrate) {
+          setIsCrateApproved(Boolean(payload.data.packaging.woodenCrate.available));
+        }
+      })
+      .catch(() => {
+        // Safe fail-closed fallback
+        if (isMounted) setIsCrateApproved(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const [boxWrapStyle, setBoxWrapStyle] = useState(() => {
+    const initial = initialCustomization?.boxWrapStyle || 'Blush Pink with Gold Foil';
+    if (initial.toLowerCase().includes('wooden') && !isCrateApproved) {
+      return 'Blush Pink with Gold Foil';
+    }
+    return initial;
+  });
   const [waxSealColor, setWaxSealColor] = useState<'crimson' | 'gold' | 'navy' | 'emerald'>('gold');
-  const [activeTab, setActiveTab] = useState<'engrave' | 'giftnote' | 'packaging'>('engrave');
+  const [activeTab, setActiveTab] = useState<'engrave' | 'artwork' | 'giftnote' | 'packaging'>('engrave');
+
+  // Batch 7: Artwork Upload, Crop & Placement State
+  const [artworkUploadId, setArtworkUploadId] = useState<string | null>(
+    initialCustomization?.artworkUploadId || null
+  );
+  const [artworkPreviewUrl, setArtworkPreviewUrl] = useState<string | null>(
+    initialCustomization?.artworkPreviewUrl || null
+  );
+  const [artworkFilename, setArtworkFilename] = useState<string | null>(
+    initialCustomization?.artworkFilename || null
+  );
+  const [artworkScale, setArtworkScale] = useState<number>(
+    initialCustomization?.placementSettings?.scale || 1.0
+  );
+  const [artworkOffsetX, setArtworkOffsetX] = useState<number>(
+    initialCustomization?.placementSettings?.offsetX || 0
+  );
+  const [artworkOffsetY, setArtworkOffsetY] = useState<number>(
+    initialCustomization?.placementSettings?.offsetY || 0
+  );
+  const [artworkPosition, setArtworkPosition] = useState<string>(
+    initialCustomization?.placementSettings?.position || 'CENTER'
+  );
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [proofApproved, setProofApproved] = useState<boolean>(
+    initialCustomization?.proofApproved ?? true
+  );
 
   const fontOptions = [
     { name: 'Dancing Script', label: 'Calligraphy Romance', className: 'font-script italic text-2xl' },
     { name: 'Playfair Display', label: 'Royal Serif Monogram', className: 'font-serif text-xl tracking-wider' },
+    { name: 'Cormorant Garamond', label: 'Atelier Classic Serif', className: 'font-serif text-xl tracking-wide' },
+    { name: 'Great Vibes', label: 'Flourished Script', className: 'font-script italic text-2xl' },
     { name: 'Plus Jakarta Sans', label: 'Modern Minimalist', className: 'font-sans font-bold text-lg uppercase tracking-widest' },
     { name: 'Alex Brush', label: 'Vintage Hand-Etched', className: 'font-script text-2xl' }
   ];
+
+  const getFontCssFamily = (fontName: string) => {
+    switch (fontName) {
+      case 'Playfair Display':
+        return "'Playfair Display', serif";
+      case 'Cormorant Garamond':
+        return "'Cormorant Garamond', serif";
+      case 'Great Vibes':
+        return "'Great Vibes', cursive";
+      case 'Dancing Script':
+        return "'Dancing Script', cursive";
+      case 'Alex Brush':
+        return "'Alex Brush', cursive";
+      case 'Plus Jakarta Sans':
+      default:
+        return "'Plus Jakarta Sans', sans-serif";
+    }
+  };
 
   const ribbonColors = [
     { name: 'Rose Gold Silk', bg: 'bg-[#b76e79]', border: 'border-[#914d57]' },
@@ -68,18 +156,242 @@ export const PersonalizationStudio: React.FC<PersonalizationStudioProps> = ({
   ];
 
   const boxOptions = [
-    { id: 'Blush Pink with Gold Foil', label: 'Blush Pink & Gold Foil Lid', desc: 'Handcrafted rigid keepsake case with 24K hot-stamped gold trim' },
-    { id: 'Midnight Matte Rigid Box', label: 'Midnight Matte Royal Case', desc: 'High-density luxury magnetic closure case with satin bed' },
-    { id: 'Vintage Wooden Keepsake Crate', label: 'Artisanal Pine Wood Crate', desc: 'Sustainably sourced pine wood slider box with brass latch (+₹150)' }
+    {
+      id: 'Blush Pink with Gold Foil',
+      label: 'Blush Pink & Gold Foil Lid',
+      desc: 'Handcrafted rigid keepsake case with 24K hot-stamped gold trim',
+      available: true,
+    },
+    {
+      id: 'Midnight Matte Rigid Box',
+      label: 'Midnight Matte Royal Case',
+      desc: 'High-density luxury magnetic closure case with satin bed',
+      available: true,
+    },
+    {
+      id: 'Vintage Wooden Keepsake Crate',
+      label: 'Artisanal Pine Wood Crate',
+      desc: isCrateApproved
+        ? 'Sustainably sourced pine wood slider box with brass latch (+₹150)'
+        : 'Artisanal pine wood crate (+₹150) — Unavailable pending store owner price approval',
+      available: isCrateApproved,
+    },
   ];
 
-  const handleApply = () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError(null);
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('File size exceeds the 5 MB limit.');
+      return;
+    }
+
+    const validMimes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!validMimes.includes(file.type)) {
+      setUploadError('Invalid format. Please upload JPEG, PNG, or WebP artwork.');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/personalization/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Artwork upload failed.');
+      }
+
+      setArtworkUploadId(data.data.id);
+      setArtworkFilename(data.data.originalFilename);
+      setArtworkPreviewUrl(URL.createObjectURL(file));
+    } catch (err: any) {
+      setUploadError(err.message || 'Network error during artwork upload.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  /**
+   * Exports the actual customer-facing preview canvas as an authentic PNG data URL.
+   * Accurately captures natively decoded artwork (JPEG/PNG/WebP) and exact typography as seen by the customer.
+   */
+  const generateCanvasPreviewProof = async (): Promise<string | null> => {
+    try {
+      if (typeof document === 'undefined') return null;
+      const canvas = document.createElement('canvas');
+      canvas.width = 500;
+      canvas.height = 380;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      // 1. Warm Ivory Base & Outer Atelier Border
+      ctx.fillStyle = '#4A0E17';
+      ctx.fillRect(0, 0, 500, 380);
+      ctx.fillStyle = '#D4AF37';
+      ctx.fillRect(4, 4, 492, 372);
+      ctx.fillStyle = '#FAF5F2';
+      ctx.fillRect(5, 5, 490, 370);
+
+      // 2. Atelier Banner Header
+      ctx.fillStyle = '#2A080C';
+      ctx.fillRect(5, 5, 490, 32);
+      ctx.fillStyle = '#F5D778';
+      ctx.font = 'bold 13px serif';
+      ctx.fillText('AJMER ATELIER BESPOKE PROOF', 18, 26);
+      ctx.fillText('v1', 460, 26);
+
+      // 3. Product Subheader
+      ctx.fillStyle = '#F2E8E2';
+      ctx.fillRect(5, 37, 490, 26);
+      ctx.fillStyle = '#4A0E17';
+      ctx.font = '11px sans-serif';
+      ctx.fillText(`ITEM: ${product.name.slice(0, 48)}`, 18, 54);
+
+      // 4. Laser Bed Plate
+      ctx.fillStyle = '#C5A059';
+      ctx.fillRect(25, 68, 450, 180);
+      ctx.fillStyle = '#18181B';
+      ctx.fillRect(28, 71, 444, 174);
+
+      // 5. Draw Artwork if present (Browser natively decodes JPEG, PNG, and WebP!)
+      if (artworkPreviewUrl) {
+        try {
+          const artImg = new Image();
+          artImg.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve) => {
+            artImg.onload = () => resolve();
+            artImg.onerror = () => resolve();
+            artImg.src = artworkPreviewUrl;
+          });
+
+          if (artImg.complete && artImg.naturalWidth > 0) {
+            const scale = Math.max(0.5, Math.min(2.0, artworkScale));
+            const artW = 60 * scale;
+            const artH = 50 * scale;
+            const artX = Math.max(35, Math.min(415, 250 + artworkOffsetX - artW / 2));
+            const artY = Math.max(78, Math.min(200, 120 + artworkOffsetY - artH / 2));
+
+            ctx.strokeStyle = '#D4AF37';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(artX - 2, artY - 2, artW + 4, artH + 4);
+            ctx.drawImage(artImg, artX, artY, artW, artH);
+          }
+        } catch {
+          // Safe fallback
+        }
+      }
+
+      // 6. Engraved Text with Exact Selected Typeface
+      if (engravedText && engravedText.trim()) {
+        const cleanText = engravedText.trim();
+        const fontCss = getFontCssFamily(fontFamily);
+        let fontSize = '22px';
+        if (fontFamily.includes('Script') || fontFamily.includes('Vibes') || fontFamily.includes('Brush')) {
+          fontSize = '26px';
+        }
+
+        ctx.font = `bold ${fontSize} ${fontCss}`;
+        ctx.textAlign = 'center';
+        const textY = artworkPreviewUrl ? 215 : 160;
+
+        // Deboss drop shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        ctx.fillText(cleanText, 251, textY + 1);
+
+        // Radiant Gold
+        ctx.fillStyle = '#F5DC82';
+        ctx.fillText(cleanText, 250, textY);
+
+        // Typography label
+        ctx.font = '10px sans-serif';
+        ctx.fillStyle = '#C5A059';
+        ctx.fillText(`Typography: ${fontFamily}`, 250, textY + 18);
+        ctx.textAlign = 'start';
+      }
+
+      // 7. Greeting Card Band
+      ctx.fillStyle = '#FFFDF8';
+      ctx.fillRect(25, 254, 450, 48);
+      ctx.strokeStyle = '#E1CDA0';
+      ctx.strokeRect(25, 254, 450, 48);
+      ctx.fillStyle = '#A21D32';
+      ctx.fillRect(25, 254, 3, 48);
+      ctx.fillStyle = '#4A0E17';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.fillText('300 GSM TEXTURED COTTON GIFT CARD', 36, 268);
+      ctx.fillStyle = '#3C3C3C';
+      ctx.font = 'italic 11px serif';
+      const note = giftNote && giftNote.trim() ? `"${giftNote.trim().slice(0, 52)}"` : '"No personal message requested"';
+      ctx.fillText(note, 36, 288);
+
+      // 8. Packaging & Ribbon Band
+      ctx.fillStyle = '#F7EEEB';
+      ctx.fillRect(25, 308, 450, 36);
+      ctx.strokeStyle = '#E6D7D2';
+      ctx.strokeRect(25, 308, 450, 36);
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#323232';
+      ctx.fillText(`Ribbon: ${ribbonColor} Silk`, 40, 330);
+      ctx.fillText(`Box: ${boxWrapStyle.slice(0, 32)}`, 250, 330);
+
+      // 9. Watermark Footer
+      ctx.font = '9px sans-serif';
+      ctx.fillStyle = '#8C4650';
+      ctx.textAlign = 'center';
+      ctx.fillText('PREVIEW PROOF (v1) - APPROVAL REFERENCE ONLY - NOT A MANUFACTURING VECTOR FILE', 250, 365);
+      ctx.textAlign = 'start';
+
+      return canvas.toDataURL('image/png');
+    } catch {
+      return null;
+    }
+  };
+
+  const handleApply = async () => {
+    let finalBoxWrap = boxWrapStyle;
+    if (finalBoxWrap.toLowerCase().includes('wooden') && !isCrateApproved) {
+      finalBoxWrap = 'Blush Pink with Gold Foil';
+    }
+
+    const clientProofDataUrl = await generateCanvasPreviewProof();
+
     onSave({
+      personalizationType: artworkUploadId
+        ? (engravedText ? 'BESPOKE_COMBO' : 'PHOTO_PRINT')
+        : 'TEXT_ENGRAVING',
       engravedText,
       fontFamily,
       giftNote,
       ribbonColor,
-      boxWrapStyle
+      boxWrapStyle: finalBoxWrap,
+      waxSealColor,
+      artworkUploadId: artworkUploadId || undefined,
+      artworkPreviewUrl: artworkPreviewUrl || undefined,
+      artworkFilename: artworkFilename || undefined,
+      clientProofDataUrl: clientProofDataUrl || undefined,
+      cropSettings: artworkUploadId ? {
+        x: 0,
+        y: 0,
+        width: 500,
+        height: 500,
+        zoom: artworkScale,
+      } : undefined,
+      placementSettings: artworkUploadId ? {
+        position: artworkPosition,
+        scale: artworkScale,
+        offsetX: artworkOffsetX,
+        offsetY: artworkOffsetY,
+      } : undefined,
+      proofApproved,
+      proofVersion: 1,
     });
   };
 
@@ -138,14 +450,29 @@ export const PersonalizationStudio: React.FC<PersonalizationStudioProps> = ({
                   className="w-full h-full object-cover"
                 />
 
-                {/* Simulated Engraved / Hot-Foil Overlay */}
+                {/* Simulated Engraved / Hot-Foil & Artwork Overlay */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-6 pointer-events-none">
+                  {artworkPreviewUrl && (
+                    <div
+                      className="mb-2 transition-transform duration-100 ease-out"
+                      style={{
+                        transform: `translate(${artworkOffsetX}px, ${artworkOffsetY}px) scale(${artworkScale})`,
+                      }}
+                    >
+                      <img
+                        src={artworkPreviewUrl}
+                        alt="Customer Artwork Preview"
+                        className="max-h-24 max-w-[120px] object-contain drop-shadow-md rounded border border-amber-300/40"
+                      />
+                    </div>
+                  )}
+
                   {engravedText && (
                     <div className="backdrop-blur-[2px] bg-black/40 px-5 py-2.5 rounded-2xl text-center shadow-2xl border border-amber-300/40 transform -rotate-1 max-w-[85%] transition-all">
                       <div
                         className="text-amber-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] tracking-wide font-normal foil-deboss"
                         style={{
-                          fontFamily: fontFamily.includes('Script') ? "'Dancing Script', cursive" : fontFamily.includes('Serif') ? "'Playfair Display', serif" : "'Plus Jakarta Sans', sans-serif"
+                          fontFamily: getFontCssFamily(fontFamily)
                         }}
                       >
                         <span className="text-xl sm:text-2xl font-bold text-gold-gradient">{engravedText}</span>
@@ -162,6 +489,14 @@ export const PersonalizationStudio: React.FC<PersonalizationStudioProps> = ({
                   <Gift className="w-3.5 h-3.5 text-[#A21D32]" />
                   <span>{ribbonColor} Silk</span>
                 </div>
+              </div>
+
+              {/* Artisan Approval Representation Notice */}
+              <div className="mt-3 text-[10.5px] text-amber-900 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200 flex items-start gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Approval Representation:</strong> This digital preview simulates styling and placement. Final precision fiber laser engraving (0.05mm tolerance) is handcrafted at the Ajmer Atelier.
+                </span>
               </div>
             </div>
 
@@ -196,39 +531,50 @@ export const PersonalizationStudio: React.FC<PersonalizationStudioProps> = ({
           <div className="md:col-span-6 p-6 flex flex-col justify-between">
             <div>
               {/* Step Tabs with Gold Underline */}
-              <div className="flex border-b border-[#E8D8D0] gap-4 mb-5 text-xs font-bold">
+              <div className="flex border-b border-[#E8D8D0] gap-2 sm:gap-4 mb-5 text-xs font-bold overflow-x-auto pb-1">
                 <button
                   onClick={() => setActiveTab('engrave')}
-                  className={`pb-2.5 transition-all flex items-center gap-1.5 border-b-2 ${
+                  className={`pb-2.5 transition-all flex items-center gap-1.5 border-b-2 shrink-0 ${
                     activeTab === 'engrave'
                       ? 'border-[#A21D32] text-[#A21D32]'
                       : 'border-transparent text-slate-400 hover:text-slate-700'
                   }`}
                 >
                   <Type className="w-3.5 h-3.5" />
-                  <span>1. Monogram / Name</span>
+                  <span>1. Inscription</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('artwork')}
+                  className={`pb-2.5 transition-all flex items-center gap-1.5 border-b-2 shrink-0 ${
+                    activeTab === 'artwork'
+                      ? 'border-[#A21D32] text-[#A21D32]'
+                      : 'border-transparent text-slate-400 hover:text-slate-700'
+                  }`}
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>2. Artwork / Logo</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('giftnote')}
-                  className={`pb-2.5 transition-all flex items-center gap-1.5 border-b-2 ${
+                  className={`pb-2.5 transition-all flex items-center gap-1.5 border-b-2 shrink-0 ${
                     activeTab === 'giftnote'
                       ? 'border-[#A21D32] text-[#A21D32]'
                       : 'border-transparent text-slate-400 hover:text-slate-700'
                   }`}
                 >
                   <MessageSquareHeart className="w-3.5 h-3.5" />
-                  <span>2. Greeting Card</span>
+                  <span>3. Card</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('packaging')}
-                  className={`pb-2.5 transition-all flex items-center gap-1.5 border-b-2 ${
+                  className={`pb-2.5 transition-all flex items-center gap-1.5 border-b-2 shrink-0 ${
                     activeTab === 'packaging'
                       ? 'border-[#A21D32] text-[#A21D32]'
                       : 'border-transparent text-slate-400 hover:text-slate-700'
                   }`}
                 >
                   <Gift className="w-3.5 h-3.5" />
-                  <span>3. Box & Ribbon</span>
+                  <span>4. Box</span>
                 </button>
               </div>
 
@@ -282,7 +628,170 @@ export const PersonalizationStudio: React.FC<PersonalizationStudioProps> = ({
                 </div>
               )}
 
-              {/* Tab 2: Greeting Card & Wax Seal */}
+              {/* Tab 2: Artwork / Logo Upload */}
+              {activeTab === 'artwork' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Upload Logo or Vector Artwork
+                    </label>
+                    <p className="text-[11px] text-slate-500 mb-2">
+                      Upload company logo, couple crest, or custom motif. Accepted: PNG, JPEG, WebP (Max 5 MB).
+                    </p>
+
+                    {uploadError && (
+                      <div className="mb-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{uploadError}</span>
+                      </div>
+                    )}
+
+                    {!artworkUploadId ? (
+                      <label className="border-2 border-dashed border-[#DCC7BE] hover:border-[#A21D32] rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer bg-slate-50/50 hover:bg-rose-50/30 transition-all text-center">
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          onChange={handleFileUpload}
+                          disabled={isUploading}
+                          className="hidden"
+                        />
+                        {isUploading ? (
+                          <div className="flex flex-col items-center gap-2 text-slate-600">
+                            <Loader2 className="w-6 h-6 animate-spin text-[#A21D32]" />
+                            <span className="text-xs font-semibold">Validating signature & uploading...</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-1.5 text-slate-600">
+                            <Upload className="w-6 h-6 text-[#A21D32]" />
+                            <span className="text-xs font-bold text-slate-800">Click to Upload Artwork</span>
+                            <span className="text-[10px] text-slate-400">PNG with transparency recommended</span>
+                          </div>
+                        )}
+                      </label>
+                    ) : (
+                      <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <ImageIcon className="w-4 h-4 text-emerald-700 shrink-0" />
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-emerald-900 truncate">
+                              {artworkFilename || 'Custom Artwork Attached'}
+                            </div>
+                            <div className="text-[10px] text-emerald-700 font-mono">
+                              ID: {artworkUploadId}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setArtworkUploadId(null);
+                            setArtworkPreviewUrl(null);
+                            setArtworkFilename(null);
+                          }}
+                          className="p-1.5 text-rose-700 hover:bg-rose-100 rounded-lg"
+                          title="Remove artwork"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {artworkUploadId && (
+                    <div className="space-y-3 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                        <span className="flex items-center gap-1.5">
+                          <Sliders className="w-3.5 h-3.5 text-[#A21D32]" />
+                          <span>Placement & Scale Adjustments</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          Zoom: {artworkScale.toFixed(1)}x
+                        </span>
+                      </div>
+
+                      {/* Scale Slider */}
+                      <div>
+                        <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                          <span>Scale / Zoom</span>
+                          <span>{artworkScale}x</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2.0"
+                          step="0.1"
+                          value={artworkScale}
+                          onChange={(e) => setArtworkScale(parseFloat(e.target.value))}
+                          className="w-full accent-[#A21D32]"
+                        />
+                      </div>
+
+                      {/* Horizontal Offset */}
+                      <div>
+                        <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                          <span>Horizontal Position (X)</span>
+                          <span>{artworkOffsetX}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-80"
+                          max="80"
+                          step="5"
+                          value={artworkOffsetX}
+                          onChange={(e) => setArtworkOffsetX(parseInt(e.target.value))}
+                          className="w-full accent-[#A21D32]"
+                        />
+                      </div>
+
+                      {/* Vertical Offset */}
+                      <div>
+                        <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                          <span>Vertical Position (Y)</span>
+                          <span>{artworkOffsetY}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-80"
+                          max="80"
+                          step="5"
+                          value={artworkOffsetY}
+                          onChange={(e) => setArtworkOffsetY(parseInt(e.target.value))}
+                          className="w-full accent-[#A21D32]"
+                        />
+                      </div>
+
+                      {/* Preset Placement Buttons */}
+                      <div>
+                        <span className="block text-[11px] text-slate-500 mb-1">Position Preset</span>
+                        <div className="grid grid-cols-4 gap-1.5 text-[10.5px]">
+                          {(['CENTER', 'TOP_CENTER', 'LID', 'PLAQUE'] as const).map((pos) => (
+                            <button
+                              key={pos}
+                              type="button"
+                              onClick={() => {
+                                setArtworkPosition(pos);
+                                if (pos === 'CENTER') { setArtworkOffsetX(0); setArtworkOffsetY(0); }
+                                if (pos === 'TOP_CENTER') { setArtworkOffsetX(0); setArtworkOffsetY(-40); }
+                                if (pos === 'LID') { setArtworkOffsetX(0); setArtworkOffsetY(-60); }
+                                if (pos === 'PLAQUE') { setArtworkOffsetX(0); setArtworkOffsetY(40); }
+                              }}
+                              className={`p-1.5 rounded-lg border text-center font-semibold transition-all ${
+                                artworkPosition === pos
+                                  ? 'bg-rose-50 border-[#A21D32] text-[#A21D32]'
+                                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              {pos.replace('_', ' ')}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 3: Greeting Card & Wax Seal */}
               {activeTab === 'giftnote' && (
                 <div className="space-y-4">
                   <div>
@@ -328,7 +837,7 @@ export const PersonalizationStudio: React.FC<PersonalizationStudioProps> = ({
                 </div>
               )}
 
-              {/* Tab 3: Packaging & Ribbon */}
+              {/* Tab 4: Packaging & Ribbon */}
               {activeTab === 'packaging' && (
                 <div className="space-y-4">
                   <div>
@@ -362,22 +871,36 @@ export const PersonalizationStudio: React.FC<PersonalizationStudioProps> = ({
                       {boxOptions.map((box) => (
                         <label
                           key={box.id}
-                          onClick={() => setBoxWrapStyle(box.id)}
-                          className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
-                            boxWrapStyle === box.id
-                              ? 'border-[#A21D32] bg-rose-50/50 ring-1 ring-[#A21D32]'
-                              : 'border-slate-200 hover:border-amber-300'
+                          onClick={() => {
+                            if (box.available) setBoxWrapStyle(box.id);
+                          }}
+                          className={`flex items-start gap-3 p-3 rounded-2xl border transition-all ${
+                            !box.available
+                              ? 'opacity-50 cursor-not-allowed bg-slate-50 border-slate-200'
+                              : boxWrapStyle === box.id
+                              ? 'border-[#A21D32] bg-rose-50/50 ring-1 ring-[#A21D32] cursor-pointer'
+                              : 'border-slate-200 hover:border-amber-300 cursor-pointer'
                           }`}
                         >
                           <input
                             type="radio"
                             name="boxWrapStyle"
+                            disabled={!box.available}
                             checked={boxWrapStyle === box.id}
-                            onChange={() => setBoxWrapStyle(box.id)}
-                            className="mt-1 text-[#A21D32] focus:ring-[#A21D32]"
+                            onChange={() => {
+                              if (box.available) setBoxWrapStyle(box.id);
+                            }}
+                            className="mt-1 text-[#A21D32] focus:ring-[#A21D32] disabled:cursor-not-allowed"
                           />
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">{box.label}</div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-900">{box.label}</span>
+                              {!box.available && (
+                                <span className="text-[9.5px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-semibold border border-amber-300/60">
+                                  Unavailable (Pending Approval)
+                                </span>
+                              )}
+                            </div>
                             <div className="text-[11px] text-slate-500">{box.desc}</div>
                           </div>
                         </label>
@@ -388,24 +911,39 @@ export const PersonalizationStudio: React.FC<PersonalizationStudioProps> = ({
               )}
             </div>
 
-            {/* Bottom Actions */}
-            <div className="mt-6 pt-4 border-t border-slate-200 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
+            {/* Proof Approval Checkbox & Bottom Actions */}
+            <div className="mt-6 pt-4 border-t border-slate-200 space-y-3">
+              <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-700 select-none">
+                <input
+                  type="checkbox"
+                  checked={proofApproved}
+                  onChange={(e) => setProofApproved(e.target.checked)}
+                  className="mt-0.5 rounded text-[#A21D32] focus:ring-[#A21D32]"
+                />
+                <span className="text-[11px] leading-snug">
+                  I have verified and approve this preview proof for production. I understand this digital proof represents styling and placement for artisan crafting.
+                </span>
+              </label>
 
-              <button
-                type="button"
-                onClick={handleApply}
-                className="px-7 py-3 rounded-full bg-gradient-to-r from-[#4A0E17] via-[#881337] to-[#A21D32] hover:from-[#3A0A11] hover:to-[#881337] text-white text-xs sm:text-sm font-semibold shadow-lg shadow-rose-950/20 flex items-center gap-2 transition-all transform active:scale-95"
-              >
-                <Check className="w-4 h-4 text-amber-300" />
-                <span>Save Bespoke Customization</span>
-              </button>
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!proofApproved}
+                  onClick={handleApply}
+                  className="px-7 py-3 rounded-full bg-gradient-to-r from-[#4A0E17] via-[#881337] to-[#A21D32] hover:from-[#3A0A11] hover:to-[#881337] text-white text-xs sm:text-sm font-semibold shadow-lg shadow-rose-950/20 flex items-center gap-2 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Check className="w-4 h-4 text-amber-300" />
+                  <span>Save Bespoke Customization</span>
+                </button>
+              </div>
             </div>
 
           </div>

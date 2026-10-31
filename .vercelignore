@@ -1,0 +1,29 @@
+# Vercel Deployment Ignore Rules
+# Keep deployment payloads minimal, safe, and free of local development artifacts
+
+# Test files & suites
+src/test/
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Documentation & Specifications
+docs/
+*.md
+!README.md
+
+# Local storage & databases
+storage/
+uploads/
+private_uploads/
+postgres_data/
+
+# Docker & local orchestration
+docker-compose.yml
+Dockerfile
+
+# Scripts & temporary dev tools
+scripts/
+.agents/

@@ -61,6 +61,7 @@ export interface BulkPricingTier {
 
 export interface Product {
   id: string;
+  slug?: string;
   name: string;
   tagline: string;
   description: string;
@@ -96,6 +97,7 @@ export interface Product {
 }
 
 export interface CustomizationOption {
+  personalizationType?: 'TEXT_ENGRAVING' | 'PHOTO_PRINT' | 'LOGO_BRANDING' | 'BESPOKE_COMBO';
   engravedText?: string;
   fontFamily?: string;
   photoUrl?: string;
@@ -103,7 +105,29 @@ export interface CustomizationOption {
   giftNote?: string;
   ribbonColor?: string;
   boxWrapStyle?: string;
+  waxSealColor?: string;
   specialInstructions?: string;
+  artworkUploadId?: string;
+  artworkPreviewUrl?: string;
+  artworkFilename?: string;
+  cropSettings?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    zoom?: number;
+    rotation?: number;
+  };
+  placementSettings?: {
+    position?: string;
+    scale?: number;
+    offsetX?: number;
+    offsetY?: number;
+  };
+  proofApproved?: boolean;
+  proofVersion?: number;
+  clientProofDataUrl?: string;
+  requireProof?: boolean;
 }
 
 export interface CartItem {
@@ -163,6 +187,7 @@ export interface Order {
     | 'Delivered';
   awbNumber?: string;
   courierPartner?: string;
+  trackingUrl?: string;
   estimatedDeliveryDate: string;
   bulkRecipientsCount?: number;
 }

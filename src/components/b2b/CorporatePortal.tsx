@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Product, BulkRecipient, CorporateQuotation } from '../../types';
+import { Product, BulkRecipient } from '../../types';
 import {
   Building2,
   FileSpreadsheet,
@@ -20,7 +20,16 @@ import {
   Layers,
   ChevronRight,
   Send,
-  DollarSign
+  DollarSign,
+  Loader2,
+  RefreshCw,
+  X,
+  Check,
+  Users,
+  MapPin,
+  Tag,
+  Clock,
+  Ban
 } from 'lucide-react';
 
 export const CorporatePortal: React.FC = () => {
@@ -28,68 +37,85 @@ export const CorporatePortal: React.FC = () => {
     products,
     organization,
     updateOrganization,
-    quotations,
-    createQuotation,
-    updateQuotationStatus,
     orders,
     addToCart,
     setActiveModal,
-    setSelectedQuotation,
     showToast,
     checkPincode
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'bulk_order' | 'recipients' | 'rfqs' | 'onboarding'>('overview');
 
+  // Real Corporate Backend State
+  const [profile, setProfile] = useState<any | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Registration Form State
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [regForm, setRegForm] = useState({
+    legalName: '',
+    displayName: '',
+    companyEmail: '',
+    contactPerson: '',
+    contactPhone: '',
+    street: '',
+    city: '',
+    state: 'Rajasthan',
+    stateCode: '08',
+    pincode: '302021',
+    gstin: '',
+    businessDetails: '',
+  });
+
+  // RFQs & Quotes State
+  const [rfqList, setRfqList] = useState<any[]>([]);
+  const [quoteList, setQuoteList] = useState<any[]>([]);
+  const [orderGroupList, setOrderGroupList] = useState<any[]>([]);
+  const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
+
+  // Quote Action Modal (Accept / Reject)
+  const [selectedQuoteForAction, setSelectedQuoteForAction] = useState<any | null>(null);
+  const [quoteActionType, setQuoteActionType] = useState<'ACCEPT' | 'REJECT'>('ACCEPT');
+  const [rejectReason, setRejectReason] = useState('');
+  const [isSubmittingQuoteAction, setIsSubmittingQuoteAction] = useState(false);
+
+  // CSV State
+  const [csvContent, setCsvContent] = useState('');
+  const [csvValidationSummary, setCsvValidationSummary] = useState<any | null>(null);
+  const [isValidatingCsv, setIsValidatingCsv] = useState(false);
+
+  // Saved Addresses & Members
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [newAddressForm, setNewAddressForm] = useState({
+    label: '',
+    recipientName: '',
+    recipientPhone: '',
+    street: '',
+    city: '',
+    state: 'Rajasthan',
+    stateCode: '08',
+    pincode: '302021',
+    department: '',
+  });
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
+
+  // Member Management Form
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<'REQUESTER' | 'APPROVER' | 'FINANCE'>('REQUESTER');
+  const [isAddingMember, setIsAddingMember] = useState(false);
+
   // Bulk Product Builder State
-  const [selectedProductId, setSelectedProductId] = useState<string>(products[4]?.id || products[0]?.id);
+  const [selectedProductId, setSelectedProductId] = useState<string>(products[0]?.id || 'prod-1');
   const [bulkQty, setBulkQty] = useState<number>(50);
-  const [companyLogoUrl, setCompanyLogoUrl] = useState<string>(
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80'
-  );
-  const [engravedNote, setEngravedNote] = useState<string>('Welcome to the NovaTech Family');
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string>('');
+  const [engravedNote, setEngravedNote] = useState<string>('Welcome to the Corporate Family');
+  const [deliveryLocationsCount, setDeliveryLocationsCount] = useState<number>(1);
+  const [isSubmittingRFQ, setIsSubmittingRFQ] = useState(false);
 
-  // Multi-recipient state
-  const [recipients, setRecipients] = useState<BulkRecipient[]>([
-    {
-      id: 'rec-1',
-      name: 'Rohan Sharma',
-      email: 'rohan.s@novatech.co.in',
-      phone: '+91 98201 11223',
-      address: 'Flat 301, Palm Grove, Powai',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      pincode: '400076',
-      department: 'Engineering',
-      customGiftNote: 'Keep shining in Q4!'
-    },
-    {
-      id: 'rec-2',
-      name: 'Priyanka Verma',
-      email: 'priyanka.v@novatech.co.in',
-      phone: '+91 98110 33445',
-      address: 'B-12, Green Park Extension',
-      city: 'New Delhi',
-      state: 'Delhi',
-      pincode: '110016',
-      department: 'Product',
-      customGiftNote: 'Welcome aboard Priyanka!'
-    },
-    {
-      id: 'rec-3',
-      name: 'Karthik Ramanathan',
-      email: 'karthik.r@novatech.co.in',
-      phone: '+91 98450 77889',
-      address: 'Plot 45, Indiranagar 100ft Road',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      pincode: '560038',
-      department: 'Design',
-      customGiftNote: 'Congratulations on 3 years at NovaTech!'
-    }
-  ]);
-
-  // New recipient form row
+  // Multi-recipient state (for manual / CSV roster)
+  const [recipients, setRecipients] = useState<BulkRecipient[]>([]);
   const [newRec, setNewRec] = useState<Partial<BulkRecipient>>({
     name: '',
     phone: '',
@@ -100,26 +126,305 @@ export const CorporatePortal: React.FC = () => {
     customGiftNote: ''
   });
 
-  const selectedProduct = products.find(p => p.id === selectedProductId) || products[0];
-
-  // Calculate bulk price
-  const calculateTierPrice = (prod: Product, qty: number) => {
-    if (prod.bulkTiers && prod.bulkTiers.length > 0) {
-      for (const tier of [...prod.bulkTiers].reverse()) {
-        if (qty >= tier.minQty) {
-          return tier.pricePerUnit;
-        }
+  // Fetch Corporate Profile
+  const fetchProfile = useCallback(async () => {
+    setIsLoadingProfile(true);
+    setProfileError(null);
+    try {
+      const res = await fetch('/api/corporate/profile');
+      const data = await res.json();
+      if (res.ok && data.success && data.hasAccount) {
+        setProfile(data.data);
+      } else {
+        setProfile(null);
       }
+    } catch (err: any) {
+      console.warn('Could not fetch corporate profile:', err.message);
+      setProfileError('Failed to load corporate profile.');
+    } finally {
+      setIsLoadingProfile(false);
     }
-    return prod.basePrice;
+  }, []);
+
+  // Fetch RFQs, Quotes, Orders, Addresses
+  const fetchCorporateData = useCallback(async () => {
+    if (!profile || profile.status !== 'APPROVED') return;
+    setIsLoadingQuotes(true);
+    try {
+      const [rfqRes, quoteRes, orderRes, addrRes] = await Promise.all([
+        fetch('/api/corporate/rfq'),
+        fetch('/api/corporate/quotes'),
+        fetch('/api/corporate/orders'),
+        fetch('/api/corporate/addresses'),
+      ]);
+
+      if (rfqRes.ok) {
+        const rfqData = await rfqRes.json();
+        if (rfqData.success) setRfqList(rfqData.data || []);
+      }
+      if (quoteRes.ok) {
+        const quoteData = await quoteRes.json();
+        if (quoteData.success) setQuoteList(quoteData.data || []);
+      }
+      if (orderRes.ok) {
+        const orderData = await orderRes.json();
+        if (orderData.success) setOrderGroupList(orderData.data || []);
+      }
+      if (addrRes.ok) {
+        const addrData = await addrRes.json();
+        if (addrData.success) setSavedAddresses(addrData.data || []);
+      }
+    } catch (err: any) {
+      console.warn('Error fetching corporate data:', err.message);
+    } finally {
+      setIsLoadingQuotes(false);
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    if (profile) {
+      fetchCorporateData();
+    }
+  }, [profile, fetchCorporateData]);
+
+  // Handle Registration
+  const handleRegisterCorporate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regForm.legalName || !regForm.displayName || !regForm.companyEmail || !regForm.contactPerson || !regForm.contactPhone || !regForm.street || !regForm.pincode) {
+      showToast('Please fill all required business registration fields.', 'error');
+      return;
+    }
+
+    setIsRegistering(true);
+    try {
+      const res = await fetch('/api/corporate/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          legalName: regForm.legalName,
+          displayName: regForm.displayName,
+          companyEmail: regForm.companyEmail,
+          contactPerson: regForm.contactPerson,
+          contactPhone: regForm.contactPhone,
+          registeredAddress: {
+            street: regForm.street,
+            city: regForm.city || 'Ajmer',
+            state: regForm.state || 'Rajasthan',
+            stateCode: regForm.stateCode || '08',
+            pincode: regForm.pincode,
+          },
+          gstin: regForm.gstin || undefined,
+          businessDetails: regForm.businessDetails || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Registration failed.');
+
+      showToast('Corporate account application submitted! Awaiting administrator approval.', 'success');
+      fetchProfile();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
-  const unitBulkPrice = calculateTierPrice(selectedProduct, bulkQty);
-  const bulkSubtotal = unitBulkPrice * bulkQty;
-  const bulkTax = Math.round(bulkSubtotal * 0.18);
-  const bulkTotal = bulkSubtotal + bulkTax;
+  // Handle RFQ Submission
+  const handleGenerateRFQ = async () => {
+    if (!profile) {
+      showToast('Please register for a corporate account first.', 'error');
+      setActiveTab('onboarding');
+      return;
+    }
 
-  // Add recipient to table
+    if (profile.status !== 'APPROVED') {
+      showToast('Your corporate account is pending admin approval. You cannot submit RFQs yet.', 'error');
+      return;
+    }
+
+    const selectedProduct = products.find(p => p.id === selectedProductId) || products[0];
+
+    setIsSubmittingRFQ(true);
+    try {
+      const res = await fetch('/api/corporate/rfq', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deliveryLocationsCount,
+          brandingLogoRequired: !!companyLogoUrl,
+          customPackagingRequired: true,
+          additionalInstructions: `Laser Engraved Note: "${engravedNote}". Logo Asset: ${companyLogoUrl || 'Standard'}. Delivery count: ${deliveryLocationsCount}.`,
+          items: [
+            {
+              productId: selectedProduct.id,
+              quantity: bulkQty,
+              personalizationNote: engravedNote,
+              logoUrl: companyLogoUrl || undefined,
+            },
+          ],
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit RFQ.');
+
+      showToast(`RFQ ${data.data.rfqNumber} submitted for sales review!`, 'success');
+      fetchCorporateData();
+      setActiveTab('rfqs');
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsSubmittingRFQ(false);
+    }
+  };
+
+  // Handle Quotation Response (Accept or Reject)
+  const handleRespondToQuote = async () => {
+    if (!selectedQuoteForAction) return;
+
+    if (quoteActionType === 'REJECT' && (!rejectReason || rejectReason.trim().length < 5)) {
+      showToast('Please enter a rejection reason of at least 5 characters.', 'error');
+      return;
+    }
+
+    setIsSubmittingQuoteAction(true);
+    try {
+      const res = await fetch(`/api/corporate/quotes/${selectedQuoteForAction.id}/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision: quoteActionType,
+          comments: quoteActionType === 'REJECT' ? rejectReason : undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to respond to quotation.');
+
+      showToast(data.message || 'Quotation updated successfully.', 'success');
+      setSelectedQuoteForAction(null);
+      setRejectReason('');
+      fetchCorporateData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsSubmittingQuoteAction(false);
+    }
+  };
+
+  // Handle CSV Validation
+  const handleValidateCsv = async (csvTextToValidate: string) => {
+    if (!csvTextToValidate.trim()) return;
+    setIsValidatingCsv(true);
+    try {
+      const res = await fetch('/api/corporate/csv/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvContent: csvTextToValidate }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'CSV validation failed.');
+
+      setCsvValidationSummary(data.data);
+      showToast(`CSV validated: ${data.data.validRowsCount} valid, ${data.data.invalidRowsCount} errors.`, data.data.invalidRowsCount > 0 ? 'error' : 'success');
+
+      // Populate valid rows into roster
+      const validRecs: BulkRecipient[] = data.data.rows
+        .filter((r: any) => r.isValid)
+        .map((r: any) => ({
+          id: `rec-${Date.now()}-${r.rowNumber}`,
+          name: r.recipientName,
+          email: r.recipientEmail || '',
+          phone: r.recipientPhone,
+          address: r.street,
+          city: r.city,
+          state: r.state,
+          pincode: r.pincode,
+          department: r.department || 'Corporate',
+          customGiftNote: r.personalizationNote || 'Best wishes from the leadership team!'
+        }));
+
+      if (validRecs.length > 0) {
+        setRecipients(validRecs);
+      }
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsValidatingCsv(false);
+    }
+  };
+
+  // Load Sample CSV
+  const handleLoadSampleCsv = () => {
+    const sample = `Recipient Name,Recipient Phone,Recipient Email,Product SKU,Quantity,Address Line 1,Address Line 2,City,State,PIN Code,Department,Personalization Note
+Rohan Sharma,9820111223,rohan@company.com,SKU-prod-1,10,Flat 301 Palm Grove,Powai,Mumbai,Maharashtra,400076,Engineering,Keep shining in Q4!
+Priyanka Verma,9811033445,priyanka@company.com,SKU-prod-1,10,B-12 Green Park Ext,,New Delhi,Delhi,110016,Product,Welcome aboard Priyanka!
+Karthik Ramanathan,9845077889,karthik@company.com,SKU-prod-1,15,Plot 45 Indiranagar,100ft Road,Bengaluru,Karnataka,560038,Design,Congrats on 3 years!
+Ananya Sen,9830022334,ananya@company.com,SKU-prod-1,15,Salt Lake Sector V,,Kolkata,West Bengal,700091,Finance,Great quarter results!`;
+    setCsvContent(sample);
+    handleValidateCsv(sample);
+  };
+
+  // Convert Accepted Quote to Group Order Checkout
+  const handleConvertQuoteToOrderGroup = async (quote: any) => {
+    if (recipients.length === 0) {
+      showToast('Please add or upload recipient addresses in the Multi-Address tab before placing group order.', 'error');
+      setActiveTab('recipients');
+      return;
+    }
+
+    try {
+      const allocations = recipients.map((r) => ({
+        recipientName: r.name,
+        recipientPhone: r.phone,
+        recipientEmail: r.email || undefined,
+        street: r.address,
+        city: r.city,
+        state: r.state,
+        pincode: r.pincode,
+        department: r.department || undefined,
+        customGiftNote: r.customGiftNote || undefined,
+        quantity: Math.floor(quote.items[0]?.quantity / recipients.length) || 1,
+        productId: quote.items[0]?.productId || products[0]?.id,
+        sku: quote.items[0]?.sku || `SKU-${products[0]?.id}`,
+      }));
+
+      // Adjust last allocation so quantity equals quote quantity exactly
+      const allocatedSum = allocations.reduce((acc, a) => acc + a.quantity, 0);
+      const targetQty = quote.items[0]?.quantity || 50;
+      if (allocatedSum !== targetQty) {
+        allocations[allocations.length - 1].quantity += (targetQty - allocatedSum);
+      }
+
+      const res = await fetch('/api/corporate/orders/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quoteId: quote.id,
+          paymentMethod: 'CORPORATE_BILLING',
+          paymentReference: `NEFT-CORP-${Date.now()}`,
+          allocations,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate corporate order group.');
+
+      showToast(`Corporate Order Group ${data.data.groupOrderNumber} placed successfully with ${allocations.length} destination orders!`, 'success');
+      fetchCorporateData();
+      setActiveTab('overview');
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  // Add Single Recipient
   const handleAddRecipient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRec.name || !newRec.pincode || !newRec.address) {
@@ -138,8 +443,8 @@ export const CorporatePortal: React.FC = () => {
       email: newRec.email || '',
       phone: newRec.phone || '+91 98000 00000',
       address: newRec.address || '',
-      city: newRec.city || pinVerification.city || 'City',
-      state: newRec.state || pinVerification.state || 'State',
+      city: newRec.city || pinVerification.city || 'Ajmer',
+      state: newRec.state || pinVerification.state || 'Rajasthan',
       pincode: newRec.pincode || '305001',
       department: newRec.department || 'Corporate',
       customGiftNote: newRec.customGiftNote || 'Best wishes from the leadership team!'
@@ -150,64 +455,31 @@ export const CorporatePortal: React.FC = () => {
     showToast(`Added ${recItem.name} to bulk dispatch list!`);
   };
 
-  // Add 10 dummy employees with 1 click
-  const handleLoadSampleRecipients = () => {
-    const samples: BulkRecipient[] = [
-      { id: `rec-s1`, name: 'Aarav Mehta', phone: '+91 98200 44551', address: 'Flat 12, Malabar Hill', city: 'Mumbai', state: 'Maharashtra', pincode: '400006', department: 'Sales', customGiftNote: 'Outstanding sales milestone!' },
-      { id: `rec-s2`, name: 'Sunita Rao', phone: '+91 98451 99221', address: 'Villa 4, Palm Meadows, Whitefield', city: 'Bengaluru', state: 'Karnataka', pincode: '560066', department: 'HR', customGiftNote: 'Thank you for your dedication' },
-      { id: `rec-s3`, name: 'Kabir Kapoor', phone: '+91 98110 88223', address: 'House 88, Sector 15', city: 'Gurugram', state: 'Haryana', pincode: '122001', department: 'Tech', customGiftNote: 'Happy Work Anniversary' },
-      { id: `rec-s4`, name: 'Megha Iyer', phone: '+91 98300 22334', address: 'Salt Lake Sector V', city: 'Kolkata', state: 'West Bengal', pincode: '700091', department: 'Finance', customGiftNote: 'Great quarter results!' }
-    ];
-    setRecipients(prev => [...prev, ...samples]);
-    showToast('Imported 4 verified employee addresses from CSV template!');
-  };
+  const selectedProduct = products.find(p => p.id === selectedProductId) || products[0];
 
-  // Dispatch configured bulk order to Cart
-  const handleSendBulkOrderToCart = () => {
-    addToCart(
-      selectedProduct,
-      bulkQty,
-      {
-        engravedText: engravedNote,
-        companyLogoUrl: companyLogoUrl,
-        boxWrapStyle: 'Corporate Rigid Matte Box'
-      },
-      true,
-      recipients.length > 0 ? recipients : undefined
-    );
-    setActiveModal('cart');
-  };
-
-  // Request Quotation (RFQ)
-  const handleGenerateRFQ = () => {
-    createQuotation({
-      companyName: organization.companyName,
-      contactPerson: organization.contactPerson,
-      email: organization.businessEmail,
-      phone: organization.phone,
-      gstin: organization.gstin,
-      items: [
-        {
-          productId: selectedProduct.id,
-          productName: selectedProduct.name,
-          quantity: bulkQty,
-          unitPrice: unitBulkPrice,
-          total: bulkSubtotal,
-          customizationNote: `Custom logo printed on top lid. Engraved note: "${engravedNote}". Direct split dispatch across ${recipients.length} addresses.`
+  // Calculate bulk price
+  const calculateTierPrice = (prod: Product, qty: number) => {
+    if (prod.bulkTiers && prod.bulkTiers.length > 0) {
+      for (const tier of [...prod.bulkTiers].reverse()) {
+        if (qty >= tier.minQty) {
+          return tier.pricePerUnit;
         }
-      ],
-      subtotal: bulkSubtotal,
-      negotiatedDiscountPercent: 5,
-      taxAmount: bulkTax,
-      shippingAmount: 0,
-      grandTotal: bulkTotal,
-      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: 'Sent for Review',
-      notes: `Target Delivery: Festive 2026. Packaging: Custom branded satin ribbons.`,
-      paymentTerms: '50% Advance + 50% on Dispatch'
-    });
-    setActiveTab('rfqs');
+      }
+    }
+    // Dynamic bulk tiers
+    if (qty >= 200) return Math.round(prod.basePrice * 0.8);
+    if (qty >= 100) return Math.round(prod.basePrice * 0.85);
+    if (qty >= 50) return Math.round(prod.basePrice * 0.9);
+    return prod.basePrice;
   };
+
+  const unitBulkPrice = calculateTierPrice(selectedProduct, bulkQty);
+  const bulkSubtotal = unitBulkPrice * bulkQty;
+  const bulkTax = Math.round(bulkSubtotal * 0.18);
+  const bulkTotal = bulkSubtotal + bulkTax;
+
+  const userRole = profile?.currentUserRole || 'REQUESTER';
+  const isOwnerOrApprover = userRole === 'OWNER' || userRole === 'APPROVER';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -218,41 +490,58 @@ export const CorporatePortal: React.FC = () => {
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono font-semibold uppercase tracking-wider">
-                Corporate Gifting Portal
+                Corporate B2B Portal
               </span>
-              <span className="text-xs text-rose-300">GSTIN: {organization.gstin}</span>
+              {profile && (
+                <>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                    profile.status === 'APPROVED'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : profile.status === 'PENDING_APPROVAL'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                  }`}>
+                    Status: {profile.status}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-xs font-mono font-semibold">
+                    Role: {userRole}
+                  </span>
+                  {profile.gstin && (
+                    <span className="text-xs text-rose-300">GSTIN: {profile.gstin}</span>
+                  )}
+                </>
+              )}
             </div>
+
             <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight">
-              {organization.companyName}
+              {profile?.displayName || profile?.companyName || organization.companyName}
             </h1>
             <p className="text-sm text-slate-300 mt-1 max-w-xl">
-              Manage bulk employee onboarding kits, festival hampers, client appreciation gifts, multi-address recipient dispatch, and formal GST quotations.
+              End-to-end corporate gifting: Request for Quotation (RFQ), negotiated corporate pricing, multi-address CSV dispatch, and official GST tax invoicing.
             </p>
           </div>
 
-          {/* Quick Credit Status Pill */}
+          {/* Quick Account Status Card */}
           <div className="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 text-xs space-y-1 sm:min-w-[240px]">
             <div className="flex justify-between text-slate-300">
-              <span>Credit Facility (Net 30):</span>
-              <span className="font-bold text-emerald-400">ACTIVE</span>
+              <span>Account Status:</span>
+              <span className={`font-bold ${profile?.status === 'APPROVED' ? 'text-emerald-400' : 'text-amber-300'}`}>
+                {profile ? profile.status : 'NOT REGISTERED'}
+              </span>
             </div>
             <div className="flex justify-between text-slate-200">
-              <span>Credit Limit:</span>
-              <strong className="text-white">₹{organization.creditLimit.toLocaleString('en-IN')}</strong>
+              <span>Active RFQs:</span>
+              <strong className="text-white">{rfqList.length}</strong>
             </div>
             <div className="flex justify-between text-slate-200">
-              <span>Available Credit:</span>
-              <strong className="text-emerald-300">
-                ₹{(organization.creditLimit - organization.creditUsed).toLocaleString('en-IN')}
-              </strong>
+              <span>Issued Quotes:</span>
+              <strong className="text-amber-300">{quoteList.filter(q => q.status === 'ISSUED').length}</strong>
             </div>
-            <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden mt-1.5">
-              <div
-                className="bg-emerald-400 h-full rounded-full"
-                style={{ width: `${(organization.creditUsed / organization.creditLimit) * 100}%` }}
-              />
+            <div className="flex justify-between text-slate-200">
+              <span>Order Groups:</span>
+              <strong className="text-emerald-300">{orderGroupList.length}</strong>
             </div>
           </div>
         </div>
@@ -268,7 +557,7 @@ export const CorporatePortal: React.FC = () => {
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span>Dashboard Overview</span>
+            <span>Overview & Activity</span>
           </button>
 
           <button
@@ -280,7 +569,7 @@ export const CorporatePortal: React.FC = () => {
             }`}
           >
             <Layers className="w-4 h-4 text-rose-600" />
-            <span>Bulk Order & Pricing Calculator</span>
+            <span>RFQ & Pricing Calculator</span>
           </button>
 
           <button
@@ -292,7 +581,7 @@ export const CorporatePortal: React.FC = () => {
             }`}
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-            <span>Multi-Address Dispatch ({recipients.length})</span>
+            <span>Multi-Address & CSV ({recipients.length})</span>
           </button>
 
           <button
@@ -304,7 +593,7 @@ export const CorporatePortal: React.FC = () => {
             }`}
           >
             <FileText className="w-4 h-4 text-amber-400" />
-            <span>Quotations & POs ({quotations.length})</span>
+            <span>Quotations & Approvals ({quoteList.length})</span>
           </button>
 
           <button
@@ -316,10 +605,32 @@ export const CorporatePortal: React.FC = () => {
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>GST & Company Profile</span>
+            <span>Company Profile & Members</span>
           </button>
         </div>
       </div>
+
+      {/* Account Pending Approval Banner */}
+      {profile && profile.status === 'PENDING_APPROVAL' && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-3 text-xs text-amber-900 shadow-xs">
+          <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <strong className="block font-bold">Corporate Application Pending Review</strong>
+            <span>Your corporate onboarding details have been submitted and are being reviewed by Snappy Gifts administrative staff. RFQ submission and order creation will be activated upon approval.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Account Suspended Banner */}
+      {profile && profile.status === 'SUSPENDED' && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-3 text-xs text-rose-900 shadow-xs">
+          <Ban className="w-5 h-5 text-rose-600 shrink-0" />
+          <div>
+            <strong className="block font-bold">Corporate Account Suspended</strong>
+            <span>This corporate account has been temporarily suspended by Snappy Gifts management. Please contact your dedicated account manager or finance desk for reactivation.</span>
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: OVERVIEW */}
       {activeTab === 'overview' && (
@@ -327,55 +638,54 @@ export const CorporatePortal: React.FC = () => {
           {/* Quick Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-5 rounded-2xl bg-white border border-rose-100 shadow-xs">
-              <div className="text-xs font-semibold text-slate-500">Corporate Orders Placed</div>
+              <div className="text-xs font-semibold text-slate-500">Corporate Order Groups</div>
               <div className="text-2xl font-serif font-bold text-slate-900 mt-1">
-                {orders.filter(o => o.type === 'B2B').length} Orders
+                {orderGroupList.length} Groups
               </div>
               <div className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> All GST input invoices generated
+                <CheckCircle2 className="w-3.5 h-3.5" /> Split multi-address dispatch tracking
               </div>
             </div>
 
             <div className="p-5 rounded-2xl bg-white border border-rose-100 shadow-xs">
-              <div className="text-xs font-semibold text-slate-500">Active Quotations</div>
+              <div className="text-xs font-semibold text-slate-500">Quotations Received</div>
               <div className="text-2xl font-serif font-bold text-slate-900 mt-1">
-                {quotations.length} RFQs
+                {quoteList.length} Quotes
               </div>
               <div className="text-[11px] text-amber-700 mt-1">
-                Valid for 30 business days
+                {quoteList.filter(q => q.status === 'ISSUED').length} awaiting decision
               </div>
             </div>
 
             <div className="p-5 rounded-2xl bg-white border border-rose-100 shadow-xs">
-              <div className="text-xs font-semibold text-slate-500">Total Gift Dispatches</div>
+              <div className="text-xs font-semibold text-slate-500">Active RFQs</div>
               <div className="text-2xl font-serif font-bold text-slate-900 mt-1">
-                68 Employees
+                {rfqList.length} RFQs
               </div>
-              <div className="text-[11px] text-slate-500 mt-1">Across 18 tier-1/tier-2 cities</div>
+              <div className="text-[11px] text-slate-500 mt-1">Custom packaging & volume requests</div>
             </div>
 
             <div className="p-5 rounded-2xl bg-white border border-rose-100 shadow-xs">
-              <div className="text-xs font-semibold text-slate-500">Dedicated Account Manager</div>
-              <div className="text-sm font-bold text-slate-900 mt-1">Vikram Sharma (Ajmer HQ)</div>
+              <div className="text-xs font-semibold text-slate-500">Corporate Account Desk</div>
+              <div className="text-sm font-bold text-slate-900 mt-1">Corporate Client Services</div>
               <div className="text-[11px] text-rose-700 font-semibold mt-1">
-                Direct: +91 98290 84721
+                procurement@snappygifts.in
               </div>
             </div>
           </div>
 
           {/* Quick Action Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Card 1 */}
             <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-50 to-rose-50 border border-amber-200 shadow-xs flex flex-col justify-between">
               <div>
                 <span className="text-[10px] font-bold tracking-wider text-amber-900 uppercase bg-amber-100 px-2 py-0.5 rounded-full">
-                  Fast-Track Fulfillment
+                  Volume Pricing
                 </span>
                 <h3 className="font-serif text-xl font-bold text-slate-900 mt-2">
-                  Build Custom Bulk Hampers with Tiered Pricing
+                  Request RFQ & Custom Packaging Quotation
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
-                  Select products, customize with company logo, choose rigid box styles, and enjoy tiered volume discounts up to 35%.
+                  Configure corporate gifts with logo branding, select box finishes, specify delivery locations, and receive formal quote proposals.
                 </p>
               </div>
 
@@ -383,22 +693,21 @@ export const CorporatePortal: React.FC = () => {
                 onClick={() => setActiveTab('bulk_order')}
                 className="mt-5 w-fit px-5 py-2.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 flex items-center gap-2 shadow-xs"
               >
-                <span>Launch Bulk Builder</span>
+                <span>Launch RFQ Builder</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Card 2 */}
             <div className="p-6 rounded-3xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 shadow-xs flex flex-col justify-between">
               <div>
                 <span className="text-[10px] font-bold tracking-wider text-blue-900 uppercase bg-blue-100 px-2 py-0.5 rounded-full">
-                  Spreadsheet Import
+                  Bulk CSV Import
                 </span>
                 <h3 className="font-serif text-xl font-bold text-slate-900 mt-2">
-                  Multi-Address Recipient Split Logistics
+                  Multi-Address Delivery & Recipient Roster
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
-                  Distribute 50 to 5,000 gifts directly to individual employee home doorsteps or regional branches with consolidated tracking.
+                  Upload CSV spreadsheets with employee addresses, validate Indian PIN codes, and split large orders into doorstep shipments.
                 </p>
               </div>
 
@@ -406,23 +715,59 @@ export const CorporatePortal: React.FC = () => {
                 onClick={() => setActiveTab('recipients')}
                 className="mt-5 w-fit px-5 py-2.5 rounded-full bg-blue-800 text-white text-xs font-semibold hover:bg-blue-900 flex items-center gap-2 shadow-xs"
               >
-                <span>Manage Recipient List</span>
+                <span>Manage CSV Recipients</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
+
+          {/* Recent Corporate Order Groups */}
+          {orderGroupList.length > 0 && (
+            <div className="p-6 rounded-3xl bg-white border border-rose-100 shadow-xs space-y-4">
+              <h3 className="font-serif text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Truck className="w-5 h-5 text-rose-700" />
+                <span>Recent Multi-Address Order Groups</span>
+              </h3>
+
+              <div className="divide-y divide-slate-100">
+                {orderGroupList.map((grp) => (
+                  <div key={grp.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-slate-900">{grp.groupOrderNumber}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                          {grp.paymentStatus}
+                        </span>
+                      </div>
+                      <div className="text-slate-500 mt-0.5">
+                        {grp.totalDestinations} destination addresses • {grp.totalQuantity} total units
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-serif font-bold text-sm text-rose-950">
+                        ₹{Number(grp.grandTotalPaise / 100n || grp.grandTotalPaise).toLocaleString('en-IN')}
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        {new Date(grp.createdAt).toLocaleDateString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* TAB 2: BULK ORDER & PRICING CALCULATOR */}
+      {/* TAB 2: BULK ORDER & RFQ BUILDER */}
       {activeTab === 'bulk_order' && (
         <div className="p-6 rounded-3xl bg-white border border-rose-100 shadow-xs space-y-6">
           <div className="border-b border-slate-200 pb-4">
             <h2 className="font-serif text-2xl font-bold text-slate-900">
-              Corporate Bulk Gifting & Tiered Pricing Builder
+              Corporate Request for Quotation (RFQ) Builder
             </h2>
             <p className="text-xs text-slate-500">
-              Configure products, custom corporate branding, and receive immediate volume-discounted quotations.
+              Configure gifts, branding specifications, delivery locations, and generate formal price quotation requests.
             </p>
           </div>
 
@@ -431,9 +776,9 @@ export const CorporatePortal: React.FC = () => {
             <div className="lg:col-span-7 space-y-5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  1. Select Gifting Product / Kit
+                  1. Select Corporate Gift / Hamper
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
                   {products.map(p => (
                     <button
                       key={p.id}
@@ -462,10 +807,10 @@ export const CorporatePortal: React.FC = () => {
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    2. Select Quantity: <span className="text-rose-700 text-sm font-bold font-mono">{bulkQty} Units</span>
+                    2. Quantity: <span className="text-rose-700 text-sm font-bold font-mono">{bulkQty} Units</span>
                   </label>
                   <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">
-                    Tier Unit Price: ₹{unitBulkPrice}
+                    Tier Estimate: ₹{unitBulkPrice}/unit
                   </span>
                 </div>
                 <input
@@ -478,17 +823,35 @@ export const CorporatePortal: React.FC = () => {
                   className="w-full accent-rose-700 cursor-pointer"
                 />
                 <div className="flex justify-between text-[11px] text-slate-400 mt-1">
-                  <span>10 units (15% off)</span>
-                  <span>50 units (25% off)</span>
-                  <span>100 units (30% off)</span>
-                  <span>200+ units (35% off)</span>
+                  <span>10 units (Base)</span>
+                  <span>50 units (10% off)</span>
+                  <span>100 units (15% off)</span>
+                  <span>200+ units (20% off)</span>
                 </div>
               </div>
 
-              {/* Custom Corporate Branding */}
+              {/* Delivery Locations Count */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  3. Number of Delivery Destinations / Addresses
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={deliveryLocationsCount}
+                  onChange={(e) => setDeliveryLocationsCount(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium"
+                />
+                <span className="text-[11px] text-slate-400 mt-0.5 block">
+                  Specify 1 for consolidated delivery or multiple for individual employee doorstep split.
+                </span>
+              </div>
+
+              {/* Corporate Customization & Branding */}
               <div className="space-y-3 pt-2 border-t border-slate-100">
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  3. Corporate Customization & Note
+                  4. Custom Branding & Gift Note
                 </label>
                 
                 <div>
@@ -503,7 +866,7 @@ export const CorporatePortal: React.FC = () => {
                 </div>
 
                 <div>
-                  <span className="text-xs text-slate-600 block mb-1">Company Logo URL / Asset</span>
+                  <span className="text-xs text-slate-600 block mb-1">Company Logo Asset URL</span>
                   <input
                     type="text"
                     value={companyLogoUrl}
@@ -515,15 +878,15 @@ export const CorporatePortal: React.FC = () => {
               </div>
             </div>
 
-            {/* Right: Live Quotation Summary Card */}
+            {/* Right: Live RFQ Preview Card */}
             <div className="lg:col-span-5 bg-gradient-to-b from-[#FFFDFB] to-rose-50/50 p-6 rounded-3xl border border-rose-200 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between border-b border-rose-200 pb-3 mb-4">
                   <div className="text-sm font-serif font-bold text-slate-900">
-                    Live Commercial Summary
+                    RFQ Commercial Estimate
                   </div>
-                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-mono font-bold">
-                    PRE-APPROVED
+                  <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-mono font-bold">
+                    SUBJECT TO QUOTATION
                   </span>
                 </div>
 
@@ -532,16 +895,18 @@ export const CorporatePortal: React.FC = () => {
                   <img src={selectedProduct.images[0]} alt={selectedProduct.name} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center p-4">
                     <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-xl text-center shadow-lg border border-white/50">
-                      <div className="text-xs font-bold text-slate-900 font-mono">{organization.companyName}</div>
+                      <div className="text-xs font-bold text-slate-900 font-mono">
+                        {profile?.displayName || organization.companyName}
+                      </div>
                       <div className="text-[11px] text-rose-700 italic font-serif">"{engravedNote}"</div>
                     </div>
                   </div>
                 </div>
 
-                {/* Line Items */}
+                {/* Breakdown */}
                 <div className="space-y-2 text-xs text-slate-600">
                   <div className="flex justify-between">
-                    <span>Selected Product:</span>
+                    <span>Product:</span>
                     <strong className="text-slate-900">{selectedProduct.name}</strong>
                   </div>
                   <div className="flex justify-between">
@@ -549,24 +914,24 @@ export const CorporatePortal: React.FC = () => {
                     <strong>{bulkQty} units</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span>Negotiated Unit Price:</span>
-                    <strong className="text-rose-900">₹{unitBulkPrice} <span className="text-slate-400 line-through">₹{selectedProduct.mrp}</span></strong>
+                    <span>Estimated Unit Price:</span>
+                    <strong className="text-rose-900">₹{unitBulkPrice}</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span>Subtotal:</span>
+                    <span>Estimated Subtotal:</span>
                     <span>₹{bulkSubtotal.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>GST (18% ITC Eligible):</span>
+                    <span>Estimated GST (18% ITC):</span>
                     <span>₹{bulkTax.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between text-emerald-700">
-                    <span>Shipping (Consolidated / Split):</span>
-                    <strong>FREE (Pan-India)</strong>
+                    <span>Destinations:</span>
+                    <strong>{deliveryLocationsCount} Location(s)</strong>
                   </div>
 
                   <div className="pt-3 border-t border-rose-200 flex justify-between items-baseline font-bold text-base">
-                    <span className="text-slate-900">Total Commercial Value:</span>
+                    <span className="text-slate-900">Estimated Total:</span>
                     <span className="font-serif text-2xl text-rose-950">₹{bulkTotal.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
@@ -576,20 +941,16 @@ export const CorporatePortal: React.FC = () => {
               <div className="mt-6 pt-4 border-t border-rose-200 space-y-2.5">
                 <button
                   type="button"
-                  onClick={handleSendBulkOrderToCart}
-                  className="w-full py-3 rounded-full bg-rose-700 hover:bg-rose-800 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-rose-200 transition-all"
-                >
-                  <ShoppingBag className="w-4 h-4" />
-                  <span>Add {bulkQty} Units to Cart & Checkout</span>
-                </button>
-
-                <button
-                  type="button"
+                  disabled={isSubmittingRFQ}
                   onClick={handleGenerateRFQ}
-                  className="w-full py-3 rounded-full bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xs transition-all"
+                  className="w-full py-3 rounded-full bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-rose-200 transition-all"
                 >
-                  <FileText className="w-4 h-4 text-amber-600" />
-                  <span>Generate Formal RFQ Quotation</span>
+                  {isSubmittingRFQ ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4" />
+                  )}
+                  <span>Submit Formal RFQ to Sales Desk</span>
                 </button>
               </div>
 
@@ -598,30 +959,94 @@ export const CorporatePortal: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: RECIPIENTS LOGISTICS */}
+      {/* TAB 3: RECIPIENTS & CSV LOGISTICS */}
       {activeTab === 'recipients' && (
         <div className="p-6 rounded-3xl bg-white border border-rose-100 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
               <h2 className="font-serif text-2xl font-bold text-slate-900">
-                Multi-Address Recipient Split Logistics
+                Multi-Address CSV Upload & Recipient Allocation
               </h2>
               <p className="text-xs text-slate-500">
-                Upload recipient lists, validate Indian PIN codes, and dispatch individual gifts with custom notes.
+                Upload recipient CSV with formula injection defense and Indian PIN code validation.
               </p>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleLoadSampleRecipients}
+                onClick={handleLoadSampleCsv}
                 className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5 transition-all"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Import Sample CSV</span>
+                <span>Load Sample CSV</span>
               </button>
             </div>
           </div>
+
+          {/* CSV Input / Drop Area */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <span>Paste CSV or Upload Spreadsheet File (Max 2MB, 500 rows)</span>
+              {isValidatingCsv && <Loader2 className="w-4 h-4 animate-spin text-rose-600" />}
+            </div>
+
+            <textarea
+              rows={4}
+              placeholder="Paste raw CSV content here..."
+              value={csvContent}
+              onChange={(e) => {
+                setCsvContent(e.target.value);
+                if (e.target.value.includes('\n')) {
+                  handleValidateCsv(e.target.value);
+                }
+              }}
+              className="w-full p-3 rounded-xl border border-slate-200 font-mono text-xs focus:outline-hidden"
+            />
+
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">
+                Columns: Recipient Name, Recipient Phone, Product SKU, Quantity, Address Line 1, City, State, PIN Code
+              </span>
+              <button
+                type="button"
+                onClick={() => handleValidateCsv(csvContent)}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-1.5"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Validate CSV</span>
+              </button>
+            </div>
+          </div>
+
+          {/* CSV Validation Feedback Banner */}
+          {csvValidationSummary && (
+            <div className={`p-4 rounded-2xl border text-xs space-y-2 ${
+              csvValidationSummary.invalidRowsCount === 0
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}>
+              <div className="flex items-center justify-between font-bold">
+                <span>Validation Result: {csvValidationSummary.validRowsCount} valid / {csvValidationSummary.totalRows} total rows</span>
+                {csvValidationSummary.invalidRowsCount === 0 ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800 text-[10px]">ALL ROWS VALID</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 text-[10px]">{csvValidationSummary.invalidRowsCount} ERRORS FOUND</span>
+                )}
+              </div>
+
+              {csvValidationSummary.errors.length > 0 && (
+                <div className="max-h-24 overflow-y-auto space-y-1 text-rose-700 font-mono text-[11px] bg-white/70 p-2 rounded-lg">
+                  {csvValidationSummary.errors.slice(0, 5).map((err: string, idx: number) => (
+                    <div key={idx}>• {err}</div>
+                  ))}
+                  {csvValidationSummary.errors.length > 5 && (
+                    <div>+ {csvValidationSummary.errors.length - 5} more row errors...</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Quick Add Row */}
           <form onSubmit={handleAddRecipient} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
@@ -640,7 +1065,7 @@ export const CorporatePortal: React.FC = () => {
               />
               <input
                 type="text"
-                placeholder="Phone (Mobile) *"
+                placeholder="Phone (10 digits) *"
                 value={newRec.phone || ''}
                 onChange={(e) => setNewRec({ ...newRec, phone: e.target.value })}
                 className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-hidden"
@@ -732,26 +1157,44 @@ export const CorporatePortal: React.FC = () => {
                     </td>
                   </tr>
                 ))}
+                {recipients.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-6 text-center text-slate-400 italic">
+                      No recipients in roster. Import a CSV or add manually above.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* TAB 4: RFQs & PURCHASE ORDERS */}
+      {/* TAB 4: RFQS & QUOTATIONS WITH APPROVAL WORKFLOW */}
       {activeTab === 'rfqs' && (
         <div className="p-6 rounded-3xl bg-white border border-rose-100 shadow-xs space-y-6">
-          <div className="border-b border-slate-200 pb-4">
-            <h2 className="font-serif text-2xl font-bold text-slate-900">
-              Corporate Quotations & Purchase Orders
-            </h2>
-            <p className="text-xs text-slate-500">
-              Review formal GST quotes, accept terms, download PDF quotations, and convert to production purchase orders.
-            </p>
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+            <div>
+              <h2 className="font-serif text-2xl font-bold text-slate-900">
+                Quotations & Formal Commercial POs
+              </h2>
+              <p className="text-xs text-slate-500">
+                Review official GST quotations, compare revisions, and exercise APPROVER / OWNER acceptance.
+              </p>
+            </div>
+            <button
+              onClick={fetchCorporateData}
+              className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs flex items-center gap-1"
+              title="Refresh Quotes"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Refresh</span>
+            </button>
           </div>
 
+          {/* Quotations List */}
           <div className="space-y-4">
-            {quotations.map((q) => (
+            {quoteList.map((q) => (
               <div
                 key={q.id}
                 className="p-5 rounded-2xl border border-rose-100 bg-[#FFFDFB] shadow-2xs space-y-4"
@@ -759,73 +1202,107 @@ export const CorporatePortal: React.FC = () => {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-slate-900 text-sm">{q.rfqNumber}</span>
+                      <span className="font-mono font-bold text-slate-900 text-sm">{q.quoteNumber}</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold">
+                        Rev {q.revision}
+                      </span>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        q.status === 'Customer Accepted'
+                        q.status === 'ACCEPTED'
                           ? 'bg-emerald-100 text-emerald-800'
-                          : q.status === 'Sent for Review'
+                          : q.status === 'ISSUED'
                           ? 'bg-amber-100 text-amber-800'
-                          : 'bg-blue-100 text-blue-800'
+                          : q.status === 'SUPERSEDED'
+                          ? 'bg-slate-200 text-slate-600'
+                          : 'bg-rose-100 text-rose-800'
                       }`}>
                         {q.status}
                       </span>
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">
-                      Created on: {q.createdAt} | Valid Until: <strong>{q.validUntil}</strong>
+                      Valid Until: <strong>{new Date(q.validUntil).toLocaleDateString('en-IN')}</strong>
+                      {q.rfqId && <span className="ml-2 font-mono text-slate-400">Linked RFQ</span>}
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <div className="text-xs text-slate-500">Total Quotation Value</div>
+                    <div className="text-xs text-slate-500">Total Commercial Value</div>
                     <div className="font-serif font-bold text-xl text-rose-950">
-                      ₹{q.grandTotal.toLocaleString('en-IN')}
+                      ₹{Number(q.grandTotalPaise / 100n || q.grandTotalPaise).toLocaleString('en-IN')}
                     </div>
                   </div>
                 </div>
 
                 {/* Items in Quotation */}
                 <div className="space-y-2">
-                  {q.items.map((item, idx) => (
+                  {(q.items || []).map((item: any, idx: number) => (
                     <div key={idx} className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-slate-50">
                       <div>
                         <div className="font-bold text-slate-900">{item.productName}</div>
-                        <div className="text-[11px] text-slate-500">{item.customizationNote}</div>
+                        <div className="text-[11px] text-slate-500">SKU: {item.sku} • HSN: {item.hsnCode}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold">{item.quantity} pcs @ ₹{item.unitPrice}</div>
-                        <div className="text-slate-500 text-[11px]">Total: ₹{item.total.toLocaleString('en-IN')}</div>
+                        <div className="font-bold">{item.quantity} pcs @ ₹{item.unitPricePaise / 100}</div>
+                        <div className="text-slate-500 text-[11px]">
+                          Total: ₹{Number(item.lineTotalPaise / 100n || item.lineTotalPaise).toLocaleString('en-IN')}
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Terms and Action */}
+                {/* Commercial Terms & Customer Notes */}
+                {q.commercialTerms && (
+                  <div className="text-xs text-slate-600 p-2.5 rounded-xl bg-amber-50/50 border border-amber-100">
+                    <strong className="block font-bold text-slate-800">Commercial Terms:</strong>
+                    <span>{q.commercialTerms}</span>
+                  </div>
+                )}
+
+                {/* Actions */}
                 <div className="flex flex-wrap items-center justify-between gap-4 pt-2 text-xs">
                   <div className="text-slate-600">
-                    <span>Payment Terms: </span>
-                    <strong className="text-slate-800">{q.paymentTerms}</strong>
-                    <span className="text-slate-400 ml-2">| Tax Rate: 18% IGST included</span>
+                    <span>Tax Calculation: </span>
+                    <strong className="text-slate-800">
+                      ₹{Number(q.taxTotalPaise / 100n || q.taxTotalPaise).toLocaleString('en-IN')} (GST ITC Eligible)
+                    </strong>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedQuotation(q);
-                        setActiveModal('invoice_view');
-                      }}
-                      className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5"
-                    >
-                      <Download className="w-3.5 h-3.5 text-rose-600" />
-                      <span>Print Official GST Quote</span>
-                    </button>
+                    {/* APPROVAL WORKFLOW: Only APPROVER or OWNER can accept or reject */}
+                    {q.status === 'ISSUED' && q.isLatestRevision && isOwnerOrApprover && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedQuoteForAction(q);
+                            setQuoteActionType('REJECT');
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-semibold text-xs flex items-center gap-1"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Reject Quote</span>
+                        </button>
 
-                    {q.status !== 'Customer Accepted' && (
+                        <button
+                          onClick={() => {
+                            setSelectedQuoteForAction(q);
+                            setQuoteActionType('ACCEPT');
+                          }}
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Accept Quotation</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* Convert accepted quote to order group */}
+                    {q.status === 'ACCEPTED' && (
                       <button
-                        onClick={() => updateQuotationStatus(q.id, 'Customer Accepted')}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs"
+                        onClick={() => handleConvertQuoteToOrderGroup(q)}
+                        className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Accept Quote & Issue PO</span>
+                        <ShoppingBag className="w-3.5 h-3.5" />
+                        <span>Place Multi-Address Order Group</span>
                       </button>
                     )}
                   </div>
@@ -833,81 +1310,315 @@ export const CorporatePortal: React.FC = () => {
 
               </div>
             ))}
+
+            {quoteList.length === 0 && (
+              <div className="p-8 text-center text-slate-400 italic">
+                No corporate quotations found. Submit an RFQ to receive an official GST quote from our sales desk.
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* TAB 5: ONBOARDING & GST PROFILE */}
+      {/* TAB 5: COMPANY PROFILE, MEMBERS & ADDRESSES */}
       {activeTab === 'onboarding' && (
-        <div className="p-6 rounded-3xl bg-white border border-rose-100 shadow-xs space-y-6">
-          <div className="border-b border-slate-200 pb-4">
-            <h2 className="font-serif text-2xl font-bold text-slate-900">
-              Corporate Entity & GST Profile
-            </h2>
-            <p className="text-xs text-slate-500">
-              Registered business details for automated Tax Invoicing, Purchase Orders, and Net 30 Credit approval.
+        <div className="space-y-6">
+          {!profile ? (
+            /* Registration Form if user has no corporate account yet */
+            <div className="p-6 rounded-3xl bg-white border border-rose-100 shadow-xs space-y-6">
+              <div className="border-b border-slate-200 pb-4">
+                <h2 className="font-serif text-2xl font-bold text-slate-900">
+                  Apply for a Corporate B2B Account
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Register your business entity for volume pricing agreements, dedicated sales manager, and multi-address order groups.
+                </p>
+              </div>
+
+              <form onSubmit={handleRegisterCorporate} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Legal Company Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Acme Innovations Pvt Ltd"
+                      value={regForm.legalName}
+                      onChange={(e) => setRegForm({ ...regForm, legalName: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Brand / Display Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Acme Innovations"
+                      value={regForm.displayName}
+                      onChange={(e) => setRegForm({ ...regForm, displayName: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Company Procurement Email *</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="procurement@acme.com"
+                      value={regForm.companyEmail}
+                      onChange={(e) => setRegForm({ ...regForm, companyEmail: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Contact Person Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Rahul Sharma"
+                      value={regForm.contactPerson}
+                      onChange={(e) => setRegForm({ ...regForm, contactPerson: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Contact Phone (10 digits) *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="+91 98000 00000"
+                      value={regForm.contactPhone}
+                      onChange={(e) => setRegForm({ ...regForm, contactPhone: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">GSTIN (Optional / Where Applicable)</label>
+                    <input
+                      type="text"
+                      maxLength={15}
+                      placeholder="08AABCS1429B1Z1"
+                      value={regForm.gstin}
+                      onChange={(e) => setRegForm({ ...regForm, gstin: e.target.value.toUpperCase() })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono uppercase"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Registered Street Address *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Floor 4, Tech Park, Outer Ring Road"
+                      value={regForm.street}
+                      onChange={(e) => setRegForm({ ...regForm, street: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">City *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Bengaluru"
+                      value={regForm.city}
+                      onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">6-Digit PIN Code *</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      placeholder="560103"
+                      value={regForm.pincode}
+                      onChange={(e) => setRegForm({ ...regForm, pincode: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isRegistering}
+                    className="px-6 py-2.5 rounded-full bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-2 shadow-md shadow-rose-200"
+                  >
+                    {isRegistering ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                    <span>Submit Corporate Application</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            /* Active Company Profile & Details */
+            <div className="space-y-6">
+              <div className="p-6 rounded-3xl bg-white border border-rose-100 shadow-xs space-y-4">
+                <div className="border-b border-slate-200 pb-3 flex justify-between items-center">
+                  <div>
+                    <h2 className="font-serif text-2xl font-bold text-slate-900">
+                      Registered Company Profile
+                    </h2>
+                    <p className="text-xs text-slate-500">Legal entity information registered with Snappy Gifts.</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                    profile.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {profile.status}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <span className="text-slate-400 block">Legal Name:</span>
+                    <strong className="text-slate-900">{profile.legalName || profile.companyName}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Business Display:</span>
+                    <strong className="text-slate-900">{profile.displayName || profile.companyName}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">GSTIN:</span>
+                    <strong className="text-slate-900 font-mono">{profile.gstin || 'Not Provided'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Procurement Email:</span>
+                    <strong className="text-slate-900">{profile.companyEmail || profile.businessEmail}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Contact Phone:</span>
+                    <strong className="text-slate-900">{profile.contactPhone || profile.phone}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Your Role:</span>
+                    <strong className="text-rose-700 font-bold">{userRole}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Members Management */}
+              <div className="p-6 rounded-3xl bg-white border border-rose-100 shadow-xs space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+                  <div>
+                    <h3 className="font-serif text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-rose-700" />
+                      <span>Corporate Account Members</span>
+                    </h3>
+                    <p className="text-xs text-slate-500">Manage permissions across OWNER, REQUESTER, APPROVER, and FINANCE.</p>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-slate-100 text-xs">
+                  {(profile.memberships || []).map((m: any) => (
+                    <div key={m.id} className="py-2.5 flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-slate-900">{m.userName || m.user?.name || m.userId}</div>
+                        <div className="text-[11px] text-slate-400">{m.userEmail || m.user?.email}</div>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold font-mono text-[10px]">
+                        {m.role}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Saved Delivery Addresses */}
+              <div className="p-6 rounded-3xl bg-white border border-rose-100 shadow-xs space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+                  <div>
+                    <h3 className="font-serif text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <MapPin className="w-5 h-5 text-rose-700" />
+                      <span>Saved Corporate Delivery Addresses</span>
+                    </h3>
+                    <p className="text-xs text-slate-500">Corporate branch offices and fulfillment hubs.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {savedAddresses.map((addr) => (
+                    <div key={addr.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50 text-xs space-y-1">
+                      <div className="font-bold text-slate-900 flex justify-between">
+                        <span>{addr.label}</span>
+                        <span className="font-mono text-slate-500">{addr.pincode}</span>
+                      </div>
+                      <div className="text-slate-600">{addr.recipientName} ({addr.recipientPhone})</div>
+                      <div className="text-slate-500">{addr.street}, {addr.city}, {addr.state}</div>
+                    </div>
+                  ))}
+                  {savedAddresses.length === 0 && (
+                    <div className="text-slate-400 italic text-xs col-span-2">
+                      No saved corporate addresses recorded yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Quote Accept / Reject Confirmation Modal */}
+      {selectedQuoteForAction && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-rose-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-serif font-bold text-lg text-slate-900">
+                {quoteActionType === 'ACCEPT' ? 'Accept Official Quotation' : 'Reject Quotation'}
+              </h3>
+              <button onClick={() => setSelectedQuoteForAction(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Quotation <strong className="font-mono">{selectedQuoteForAction.quoteNumber}</strong> (Rev {selectedQuoteForAction.revision}) with total commercial value of <strong>₹{Number(selectedQuoteForAction.grandTotalPaise / 100n || selectedQuoteForAction.grandTotalPaise).toLocaleString('en-IN')}</strong>.
             </p>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Company Legal Name</label>
-              <input
-                type="text"
-                value={organization.companyName}
-                onChange={(e) => updateOrganization({ companyName: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm font-medium"
-              />
-            </div>
+            {quoteActionType === 'REJECT' && (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Rejection Reason *</label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Please state why this quotation was rejected..."
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs focus:outline-hidden"
+                />
+              </div>
+            )}
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">GSTIN Number</label>
-              <input
-                type="text"
-                value={organization.gstin}
-                onChange={(e) => updateOrganization({ gstin: e.target.value.toUpperCase() })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono uppercase"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Official Procurement Email</label>
-              <input
-                type="email"
-                value={organization.businessEmail}
-                onChange={(e) => updateOrganization({ businessEmail: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Contact Phone</label>
-              <input
-                type="text"
-                value={organization.phone}
-                onChange={(e) => updateOrganization({ phone: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Industry Sector</label>
-              <input
-                type="text"
-                value={organization.industry}
-                onChange={(e) => updateOrganization({ industry: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Estimated Annual Gifting Budget</label>
-              <input
-                type="text"
-                value={organization.annualBudget}
-                onChange={(e) => updateOrganization({ annualBudget: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm"
-              />
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedQuoteForAction(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingQuoteAction}
+                onClick={handleRespondToQuote}
+                className={`px-5 py-2 rounded-xl text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs ${
+                  quoteActionType === 'ACCEPT'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+              >
+                {isSubmittingQuoteAction && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Confirm {quoteActionType === 'ACCEPT' ? 'Acceptance' : 'Rejection'}</span>
+              </button>
             </div>
           </div>
         </div>

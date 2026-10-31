@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI UI UX Motion Engine"
+  short_description: "Build accurate cinematic sites without wasted work"
+  default_prompt: "Use $ai-ui-ux-motion-engine to create an accuracy-first, timeboxed cinematic experience, reuse one master sequence, and parallelise safe independent work."

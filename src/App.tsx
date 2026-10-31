@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
@@ -50,6 +52,13 @@ const MainContent: React.FC = () => {
   } = useApp();
 
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<'featured' | 'price_asc' | 'price_desc' | 'newest'>('featured');
+  const [visibleCount, setVisibleCount] = useState<number>(8);
+
+  // Reset pagination when search or filters change
+  React.useEffect(() => {
+    setVisibleCount(8);
+  }, [searchQuery, activeCategory, activeOccasion, sortBy]);
 
   // Filter products by category, occasion, and search query
   const filteredProducts = products.filter(p => {
@@ -64,6 +73,16 @@ const MainContent: React.FC = () => {
 
     return matchesSearch && matchesCategory && matchesOccasion;
   });
+
+  // Apply sorting
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    if (sortBy === 'price_asc') return a.basePrice - b.basePrice;
+    if (sortBy === 'price_desc') return b.basePrice - a.basePrice;
+    if (sortBy === 'newest') return b.id.localeCompare(a.id);
+    return (b.isB2BRecommended ? 1 : 0) - (a.isB2BRecommended ? 1 : 0);
+  });
+
+  const displayedProducts = sortedProducts.slice(0, visibleCount);
 
   const categories = [
     'All',
@@ -172,8 +191,8 @@ const MainContent: React.FC = () => {
               </div>
             </div>
 
-            {/* Occasion Filter Strip & Result Count */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs pb-1 text-slate-500">
+            {/* Occasion Filter Strip, Sort Control & Result Count */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs pb-1 text-slate-500">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                 <span className="font-bold text-[#2F0B10] shrink-0 uppercase tracking-wider text-[10px]">
                   Occasion:
@@ -193,14 +212,34 @@ const MainContent: React.FC = () => {
                 ))}
               </div>
 
-              <div className="text-[11px] text-slate-500 font-medium">
-                Showing <strong>{filteredProducts.length}</strong> bespoke gifts
-                {searchQuery && <span> for "<strong>{searchQuery}</strong>"</span>}
+              <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
+                <div className="flex items-center gap-2">
+                  <label htmlFor="product-sort" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
+                    Sort:
+                  </label>
+                  <select
+                    id="product-sort"
+                    aria-label="Sort catalog products"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="px-3 py-1 rounded-full border border-[#DFC9C0] bg-white text-xs font-semibold text-slate-700 hover:border-[#D1395E] focus:outline-hidden focus:ring-1 focus:ring-[#D1395E]"
+                  >
+                    <option value="featured">Featured Curations</option>
+                    <option value="price_asc">Price: Low to High</option>
+                    <option value="price_desc">Price: High to Low</option>
+                    <option value="newest">Newest Additions</option>
+                  </select>
+                </div>
+
+                <div className="text-[11px] text-slate-500 font-medium">
+                  Showing <strong>{Math.min(displayedProducts.length, sortedProducts.length)}</strong> of <strong>{sortedProducts.length}</strong> gifts
+                  {searchQuery && <span> for "<strong>{searchQuery}</strong>"</span>}
+                </div>
               </div>
             </div>
 
             {/* Products Grid */}
-            {filteredProducts.length === 0 ? (
+            {sortedProducts.length === 0 ? (
               <div className="text-center py-20 px-4 bg-white rounded-3xl border border-[#EADBCE] shadow-xs">
                 <div className="w-16 h-16 rounded-full bg-rose-50 text-[#A21D32] flex items-center justify-center mx-auto mb-3 border border-rose-200">
                   <Gift className="w-8 h-8" />
@@ -223,22 +262,36 @@ const MainContent: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {filteredProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onOpenDetail={(prod) => {
-                      setSelectedProduct(prod);
-                      setActiveModal('product_detail');
-                    }}
-                    onOpenPersonalize={(prod) => {
-                      setSelectedProduct(prod);
-                      setActiveModal('personalize');
-                    }}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {displayedProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onOpenDetail={(prod) => {
+                        setSelectedProduct(prod);
+                        setActiveModal('product_detail');
+                      }}
+                      onOpenPersonalize={(prod) => {
+                        setSelectedProduct(prod);
+                        setActiveModal('personalize');
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Pagination / Load More Button */}
+                {visibleCount < sortedProducts.length && (
+                  <div className="text-center pt-8">
+                    <button
+                      onClick={() => setVisibleCount((prev) => prev + 8)}
+                      className="px-8 py-3 rounded-full bg-white border border-[#EADBCE] text-[#2F0B10] hover:border-[#D1395E] hover:bg-rose-50/50 text-xs font-bold uppercase tracking-wider transition-all shadow-xs"
+                    >
+                      Load More Curated Gifts ({sortedProducts.length - visibleCount} remaining)
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
 
@@ -494,10 +547,8 @@ const MainContent: React.FC = () => {
   );
 };
 
+export { MainContent };
+
 export default function App() {
-  return (
-    <AppProvider>
-      <MainContent />
-    </AppProvider>
-  );
+  return <MainContent />;
 }

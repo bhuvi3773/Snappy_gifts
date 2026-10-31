@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: snappy_gifts_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: snappy_user
+      POSTGRES_PASSWORD: snappy_dev_password_only
+      POSTGRES_DB: snappy_gifts_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snappy_user -d snappy_gifts_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: snappy_gifts_mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025" # Web UI
+      - "1025:1025" # SMTP Port
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_DATABASE: "" # In-memory storage for local dev
+
+volumes:
+  postgres_data:
+    driver: local

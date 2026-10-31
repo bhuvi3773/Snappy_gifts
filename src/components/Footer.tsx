@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
@@ -121,6 +123,7 @@ export const Footer: React.FC = () => {
                   type="submit"
                   className="absolute right-1.5 top-1.5 p-1.5 rounded-lg bg-[#2F0B10] hover:bg-[#4A0E17] text-amber-200 transition-colors shadow-2xs"
                   title="Subscribe"
+                  aria-label="Subscribe to VIP atelier circle"
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>

@@ -1,8 +1,47 @@
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# Build Outputs
 build/
 dist/
+.next/
+out/
+
+# Testing & Coverage
 coverage/
-.DS_Store
+*.lcov
+playwright-report/
+test-results/
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Secrets (Never commit secrets)
 .env*
 !.env.example
+*.pem
+*.key
+*.cert
+
+# Local Database & Containers
+postgres_data/
+
+# Customer Private Uploads (Stored outside public web root)
+uploads/
+private_uploads/
+storage/
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel
+
+# Build caches & info
+*.tsbuildinfo
